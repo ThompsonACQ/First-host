@@ -77,7 +77,10 @@ python -c "from django.core.management.utils import get_random_secret_key; print
 Paste the generated value into `.env`. `.env` is ignored by Git; do not commit it.
 `SECRET_KEY`, `DATABASE_URL`, and `REDIS_URL` are read from the environment (or
 local `.env`). When `DEBUG=False`, startup fails unless a secret key, PostgreSQL
-`DATABASE_URL`, Redis `REDIS_URL`, and a production host/origin are configured.
+`DATABASE_URL`, Redis `REDIS_URL`, Cloudinary credentials, and a production
+host/origin are configured. To use Cloudinary locally, set all three
+`CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET`
+values in `.env`; with none set, development continues to use local `MEDIA_ROOT`.
 
 ## Render deployment
 
@@ -111,6 +114,43 @@ The blueprint sets `DEBUG=False`, generates `SECRET_KEY`, and supplies internal
 
 Add your custom domain to both the allowed-host and CSRF origin configuration.
 Keep credentials in Render's environment settings rather than in source control.
+The blueprint deliberately leaves the Cloudinary environment variables
+unsynchronized so credentials are entered through Render's dashboard.
+
+To configure persistent uploads, create a Cloudinary account and copy its cloud
+name, API key, and API secret from the Cloudinary console. In Render, open
+**Dashboard → campus-shuttle (Web Service) → Environment → Add Environment
+Variable** and add:
+
+| Key | Value |
+| --- | --- |
+| `CLOUDINARY_CLOUD_NAME` | Your Cloudinary cloud name |
+| `CLOUDINARY_API_KEY` | Your Cloudinary API key |
+| `CLOUDINARY_API_SECRET` | Your Cloudinary API secret |
+
+Save these variables before deploying the code update. The API secret belongs
+only in Render's environment settings (or an ignored local `.env`); never put
+its value in GitHub, `render.yaml`, or `.env.example`. Production startup fails
+if any Cloudinary credential is missing. The Django `ImageField`s for school
+logos, favicons, and user profile pictures then save to Cloudinary. Existing
+forms, admin previews, and templates continue using Django's normal `.url`
+interface. Static assets remain on WhiteNoise and are not sent to Cloudinary.
+
+To verify uploads after deployment, sign in as an administrator, open School
+Settings, upload and save a new logo and favicon, then reload the page and check
+that both images still display and their image URLs point to Cloudinary. Upload
+a profile picture through the user editor in Django admin and check its preview
+as well. Redeploy, then reload the page and confirm the same images remain
+available. A live test requires valid Cloudinary credentials; it cannot be
+completed until these are configured.
+
+Changing the storage backend does not copy files already on a local or Render
+filesystem into Cloudinary. Existing database records and local media files are
+not deleted or rewritten, but any existing record that points to a local-only
+file must have that original file transferred to Cloudinary before it will
+display through the new backend. Keep a backup of existing media and complete
+that transfer before switching production storage if the current deployment
+already has uploads.
 
 `collectstatic` runs during the build and WhiteNoise serves compressed,
 manifested static assets (including Django admin assets). Migrations run at
@@ -134,13 +174,6 @@ Render deletes the database and its data. Arrange a verified database export
 and move to a durable database plan before expiration; do not rely on free
 Postgres for irreplaceable live campus data. Check the current Render free-plan
 terms before creating resources.
-
-The existing upload fields continue to use Django's `MEDIA_ROOT`/file storage.
-Render web-service disks are ephemeral, so uploaded logos/profile images can be
-lost on redeploy or instance replacement. For durable uploads, configure an
-S3-compatible object store (for example AWS S3 or Cloudflare R2) through a
-Django storage backend such as `django-storages`; this can be added without
-changing the models or upload forms.
 
 Before pushing to GitHub, run locally:
 

@@ -9,3 +9,5 @@ dj-database-url==2.3.0
 psycopg[binary]==3.2.13
 whitenoise==6.8.2
 channels-redis==4.2.1
+cloudinary==1.47.0
+django-cloudinary-storage==0.3.0

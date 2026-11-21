@@ -88,6 +88,22 @@ if not DEBUG:
             'Set CSRF_TRUSTED_ORIGINS or configure a production hostname.'
         )
 
+CLOUDINARY_CREDENTIALS = {
+    'CLOUD_NAME': config('CLOUDINARY_CLOUD_NAME', default='').strip(),
+    'API_KEY': config('CLOUDINARY_API_KEY', default='').strip(),
+    'API_SECRET': config('CLOUDINARY_API_SECRET', default='').strip(),
+}
+CLOUDINARY_CONFIGURED = all(CLOUDINARY_CREDENTIALS.values())
+if any(CLOUDINARY_CREDENTIALS.values()) and not CLOUDINARY_CONFIGURED:
+    raise ImproperlyConfigured(
+        'Configure CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and '
+        'CLOUDINARY_API_SECRET together.'
+    )
+if not DEBUG and not CLOUDINARY_CONFIGURED:
+    raise ImproperlyConfigured(
+        'Cloudinary credentials must be configured when DEBUG is False.'
+    )
+
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SECURE_SSL_REDIRECT = not DEBUG
 SESSION_COOKIE_SECURE = not DEBUG
@@ -121,6 +137,11 @@ INSTALLED_APPS = [
     'routes',
     'tracking',
 ]
+if CLOUDINARY_CONFIGURED:
+    INSTALLED_APPS.extend([
+        'cloudinary_storage',
+        'cloudinary',
+    ])
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -228,7 +249,11 @@ STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STORAGES = {
     'default': {
-        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+        'BACKEND': (
+            'cloudinary_storage.storage.MediaCloudinaryStorage'
+            if CLOUDINARY_CONFIGURED
+            else 'django.core.files.storage.FileSystemStorage'
+        ),
     },
     'staticfiles': {
         'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
@@ -238,6 +263,8 @@ STORAGES = {
 # Media files (uploaded logos, etc.)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+if CLOUDINARY_CONFIGURED:
+    CLOUDINARY_STORAGE = CLOUDINARY_CREDENTIALS
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
