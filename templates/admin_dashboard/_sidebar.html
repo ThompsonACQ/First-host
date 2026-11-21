@@ -1,7 +1,9 @@
 <aside class="admin-sidebar" id="admin-sidebar">
     <div class="sidebar-header">
         {% if school.logo and school.logo.name %}
-        <img src="{{ school.logo.url }}" alt="Logo" class="sidebar-logo">
+        <img src="{{ school.logo.url }}" alt="Logo" class="sidebar-logo"
+             onerror="this.hidden=true; this.nextElementSibling.hidden=false;">
+        <span class="sidebar-logo-placeholder" hidden>🚌</span>
         {% else %}
         <span class="sidebar-logo-placeholder">🚌</span>
         {% endif %}

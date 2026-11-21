@@ -78,7 +78,7 @@
                             <label for="{{ form.logo.id_for_label }}">School Logo</label>
                             {% if school.logo and school.logo.name %}
                             <div class="current-logo">
-                                <img src="{{ school.logo.url }}" alt="Current logo">
+                                <img src="{{ school.logo.url }}" alt="Current logo" onerror="this.hidden=true">
                             </div>
                             {% endif %}
                             {{ form.logo }}
@@ -88,7 +88,7 @@
                         <div class="form-group half">
                             <label for="{{ form.favicon.id_for_label }}">Favicon</label>
                             {% if school.favicon %}
-                            <img src="{{ school.favicon.url }}" alt="Favicon" width="32" class="current-favicon">
+                            <img src="{{ school.favicon.url }}" alt="Favicon" width="32" class="current-favicon" onerror="this.hidden=true">
                             {% endif %}
                             {{ form.favicon }}
                             {{ form.favicon.errors }}
@@ -145,7 +145,7 @@
                 <div class="preview-nav">
                     <div class="preview-brand">
                         {% if school.logo and school.logo.name %}
-                            <img src="{{ school.logo.url }}" alt="Logo" id="preview-logo">
+                            <img src="{{ school.logo.url }}" alt="Logo" id="preview-logo" onerror="this.hidden=true">
                             <span id="preview-school-name">{{ school.school_name }}</span>
                         {% else %}
                             <img src="" alt="Logo" id="preview-logo" style="display:none;">

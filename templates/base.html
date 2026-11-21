@@ -58,7 +58,9 @@
         <div class="nav-container">
             <a href="/" class="nav-brand atu-brand">
                 {% if school.logo and school.logo.name %}
-                <img src="{{ school.logo.url }}" alt="{{ school.school_name }} Logo" class="nav-logo">
+                <img src="{{ school.logo.url }}" alt="{{ school.school_name }} Logo" class="nav-logo"
+                     onerror="this.hidden=true; this.nextElementSibling.hidden=false;">
+                <span class="atu-brand-mark" hidden><i class="fa-solid fa-graduation-cap"></i></span>
                 {% else %}
                 <span class="atu-brand-mark"><i class="fa-solid fa-graduation-cap"></i></span>
                 {% endif %}

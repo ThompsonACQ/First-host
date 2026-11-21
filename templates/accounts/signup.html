@@ -9,7 +9,9 @@
     <div class="auth-card">
         <div class="auth-header">
             {% if school.logo and school.logo.name %}
-            <img src="{{ school.logo.url }}" alt="{{ school.school_name }}" class="auth-logo">
+            <img src="{{ school.logo.url }}" alt="{{ school.school_name }}" class="auth-logo"
+                 onerror="this.hidden=true; this.nextElementSibling.hidden=false;">
+            <div class="auth-icon" hidden>🚌</div>
             {% else %}
             <div class="auth-icon">🚌</div>
             {% endif %}
