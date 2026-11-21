@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block body_class %}auth-page{% endblock %}
+{% block footer %}{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="auth-header">
+            {% if school.logo and school.logo.name %}
+            <img src="{{ school.logo.url }}" alt="{{ school.school_name }}" class="auth-logo">
+            {% else %}
+            <div class="auth-icon">🚌</div>
+            {% endif %}
+            <h1 class="auth-title">{{ title }}</h1>
+            <p class="auth-subtitle">{{ school.school_name }}</p>
+        </div>
+
+        <form method="post" class="auth-form">
+            {% csrf_token %}
+            
+            {% if form.non_field_errors %}
+            <div class="form-errors">
+                {% for error in form.non_field_errors %}
+                    <span class="field-error">{{ error }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% for field in form %}
+            <div class="form-group">
+                <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                
+                {% if field.name == 'password' or field.name == 'confirm_password' %}
+                <div class="input-with-toggle">
+                    <input type="password" name="{{ field.name }}" id="{{ field.id_for_label }}"
+                           class="form-input {% if field.errors %}input-error{% endif %}"
+                           {% if field.field.required %}required{% endif %}>
+                </div>
+                {% else %}
+                <input type="{{ field.field.widget.input_type|default:'text' }}" name="{{ field.name }}" id="{{ field.id_for_label }}"
+                       class="form-input {% if field.errors %}input-error{% endif %}"
+                       value="{{ field.value|default:'' }}"
+                       {% if field.field.required %}required{% endif %}>
+                {% endif %}
+                
+                {% for error in field.errors %}
+                <span class="field-error">{{ error }}</span>
+                {% endfor %}
+            </div>
+            {% endfor %}
+
+            <button type="submit" class="btn btn-primary btn-full btn-lg">
+                Create Account
+            </button>
+        </form>
+
+        <div class="auth-footer" style="margin-top: 1.5rem;">
+            <p>Already have an account? <a href="{% url 'accounts:login' %}">Sign In here</a></p>
+            <p><a href="{% url 'accounts:auth_landing' %}">← Back to Roles</a></p>
+        </div>
+    </div>
+</div>
+{% endblock %}

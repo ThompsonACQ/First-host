@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% block title %}Welcome{% endblock %}
+
+{% block body_class %}auth-page{% endblock %}
+{% block footer %}{% endblock %}
+
+{% block content %}
+<div class="auth-container" style="max-width: 600px;">
+    <div class="auth-card text-center">
+        <div class="auth-header">
+            {% if school.logo and school.logo.name %}
+            <img src="{{ school.logo.url }}" alt="{{ school.school_name }}" class="auth-logo">
+            {% else %}
+            <div class="auth-icon">🚌</div>
+            {% endif %}
+            <h1 class="auth-title">Welcome to Shuttle Tracker</h1>
+            <p class="auth-subtitle">Please select your role to continue</p>
+        </div>
+
+        <div class="auth-options" style="display: grid; gap: 2rem; margin-top: 2rem;">
+            
+            <div class="role-section" style="padding-bottom: 1.5rem; border-bottom: 1px solid var(--border);">
+                <h3>Student / User</h3>
+                <p class="text-muted" style="margin-bottom: 1rem;">Track buses in real-time</p>
+                <div style="display: flex; gap: 1rem; justify-content: center;">
+                    <a href="{% url 'accounts:student_signup' %}" class="btn btn-outline">Sign Up as Student</a>
+                    <a href="{% url 'accounts:login' %}" class="btn btn-primary">Sign In as Student</a>
+                </div>
+            </div>
+
+            <div class="role-section" style="padding-bottom: 1.5rem; border-bottom: 1px solid var(--border);">
+                <h3>Driver</h3>
+                <p class="text-muted" style="margin-bottom: 1rem;">Broadcast GPS location</p>
+                <div style="display: flex; gap: 1rem; justify-content: center;">
+                    <a href="{% url 'accounts:driver_signup' %}" class="btn btn-outline">Sign Up as Driver</a>
+                    <a href="{% url 'accounts:login' %}" class="btn btn-primary">Sign In as Driver</a>
+                </div>
+            </div>
+
+            <div class="role-section">
+                <h3>Administrator</h3>
+                <p class="text-muted" style="margin-bottom: 1rem;">Manage the entire system</p>
+                <a href="{% url 'accounts:login' %}" class="btn btn-outline" style="width: 100%; max-width: 250px;">Admin Login</a>
+            </div>
+
+        </div>
+
+        <div class="auth-footer" style="margin-top: 2rem;">
+            <p><a href="/">← Back to Home</a></p>
+        </div>
+    </div>
+</div>
+{% endblock %}

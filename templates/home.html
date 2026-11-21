@@ -1,0 +1,281 @@
+{% extends 'base.html' %}
+{% block title %}Campus Shuttle{% endblock %}
+{% block meta_description %}{{ school.description|default:'Live campus shuttle tracking and route updates.' }}{% endblock %}
+
+{% block extra_head %}
+<style>
+.atu-home { background: #f8fafc; }
+.atu-hero { position: relative; overflow: hidden; padding: 34px 20px 44px; background: linear-gradient(180deg,#fff 0%,#f8fafc 100%); border-bottom: 1px solid #e2e8f0; }
+.atu-hero:before,.atu-hero:after { content: ""; position: absolute; width: 420px; height: 420px; border-radius: 50%; filter: blur(70px); opacity: .38; pointer-events: none; }
+.atu-hero:before { top: -250px; left: 12%; background: var(--accent); opacity: .12; }
+.atu-hero:after { top: -220px; right: 12%; background: var(--primary); opacity: .08; }
+.atu-container { max-width: 1180px; margin: auto; }
+.atu-hero-inner { position: relative; z-index: 1; text-align: center; }
+.live-pill { display: inline-flex; align-items: center; gap: 9px; background: #fff; border: 1px solid #e2e8f0; border-radius: 999px; padding: 8px 14px; font-size: 12px; color: #64748b; box-shadow: 0 2px 8px rgba(15,23,42,.05); }
+.live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--logo-color-3,var(--accent)); box-shadow: 0 0 0 5px rgba(var(--accent-rgb),.14); }
+.live-pill strong { color: var(--primary); }
+.atu-emblem { width: max-content; max-width: 100%; min-height: 64px; margin: 16px auto 12px; border-radius: 16px; background: #fff; border: 1px solid #e2e8f0; padding: 7px; box-shadow: 0 8px 25px rgba(15,23,42,.08); }
+.atu-emblem-inner { min-height: 48px; border-radius: 13px; display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 8px; padding: 6px 10px; background: var(--primary); color: var(--accent); font-size: 24px; }
+.atu-emblem-inner span { max-width: min(220px, calc(100vw - 110px)); font-size: clamp(7px, 1.5vw, 9px); font-weight: 800; letter-spacing: .4px; line-height: 1.2; text-align: center; overflow-wrap: anywhere; color: var(--accent); }
+.atu-hero h1 { margin: 0; font-family: 'Outfit',sans-serif; font-size: 42px; line-height: 1.05; color: var(--primary); letter-spacing: -1.5px; }
+.atu-hero-copy { max-width: 720px; margin: 9px auto 0; color: #64748b; font-size: 14px; line-height: 1.55; }
+.atu-actions { display: flex; justify-content: center; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+.atu-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 10px 16px; border-radius: 9px; font-weight: 800; font-size: 12px; text-decoration: none; }
+.atu-btn-primary { background: var(--primary); color: #fff; }
+.atu-btn-primary:hover { background: var(--primary); filter: brightness(.9); color: #fff; }
+.atu-btn-light { background: #fff; color: var(--primary); border: 1px solid #cbd5e1; }
+.atu-btn-muted { background: #f1f5f9; color: #475569; }
+.route-picker { max-width: 760px; margin: 24px auto 0; background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 12px 14px; box-shadow: 0 8px 22px rgba(15,23,42,.06); text-align: left; }
+.route-picker-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 7px; font-size: 10px; font-weight: 800; color: #64748b; }
+.route-picker-head strong { color: var(--primary); font-size: 9px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 999px; padding: 3px 7px; }
+.route-fields { display: grid; grid-template-columns: 1fr 26px 1fr auto; gap: 8px; align-items: end; }
+.route-field label { display: block; font-size: 9px; font-weight: 800; color: #64748b; margin-bottom: 3px; }
+.route-field select { width: 100%; height: 38px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; color: #1e293b; font-size: 12px; font-weight: 700; padding: 0 9px; }
+.route-arrow { height: 38px; display: flex; align-items: center; justify-content: center; color: #94a3b8; }
+.route-picker .atu-btn { height: 38px; padding: 8px 12px; white-space: nowrap; }
+.metrics { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-top: 24px; text-align: left; }
+.metric { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; }
+.metric-top { display: flex; justify-content: space-between; color: #64748b; font-size: 10px; font-weight: 700; }
+.metric-icon { width: 28px; height: 28px; border-radius: 7px; background: rgba(var(--accent-rgb),.12); color: var(--primary); display: flex; align-items: center; justify-content: center; }
+.metric strong { display: block; font-family: 'Outfit'; font-size: 25px; color: var(--primary); margin-top: 4px; }
+.metric span:last-child { display: block; color: #64748b; font-size: 9px; margin-top: 2px; }
+.radar-section { padding: 32px 20px; background: #f1f5f9; border-bottom: 1px solid #e2e8f0; }
+.section-head { display: flex; justify-content: space-between; align-items: end; margin-bottom: 14px; }
+.section-head h2 { margin: 2px 0 0; font-family: 'Outfit'; font-size: 24px; color: var(--primary); }
+.eyebrow { font-size: 10px; font-weight: 800; color: var(--primary); text-transform: uppercase; letter-spacing: 1.2px; }
+.radar-grid { display: grid; grid-template-columns: minmax(0,1.55fr) minmax(300px,1fr); gap: 16px; align-items: start; }
+.radar-map { height: 340px; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; background: #eef3f8; position: relative; }
+.map-strip { height: 38px; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; font-size: 10px; font-weight: 700; }
+.map-canvas { position: absolute; inset: 38px 0 0; background: #edf3f8; overflow: hidden; }
+.campus-map-svg { width: 100%; height: 100%; display: block; }
+.campus-label { fill: #64748b; font-size: 10px; font-weight: 700; font-family: 'Inter',sans-serif; }
+.campus-building { fill: #dfe7ef; stroke: #cbd5e1; stroke-width: 1; }
+.campus-road-edge { fill: none; stroke: #d8e0e8; stroke-width: 20; stroke-linecap: round; }
+.campus-road { fill: none; stroke: #fff; stroke-width: 18; stroke-linecap: round; }
+.campus-route { fill: none; stroke: var(--logo-color-1,var(--primary)); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+.campus-stop { fill: var(--logo-color-3,var(--accent)); stroke: #fff; stroke-width: 3; }
+.bus-pin { position: absolute; display: flex; flex-direction: column; align-items: center; z-index: 4; }
+.bus-pin i { width: 34px; height: 34px; border-radius: 50%; background: var(--primary); color: var(--accent); display: flex; align-items: center; justify-content: center; border: 3px solid #fff; box-shadow: 0 5px 14px rgba(15,23,42,.22); }
+.bus-pin:nth-of-type(1) i { background: var(--logo-color-1,var(--primary)); color: #fff; }
+.bus-pin:nth-of-type(2) i { background: var(--logo-color-2,var(--secondary)); color: #fff; }
+.bus-pin:nth-of-type(3) i { background: var(--logo-color-3,var(--accent)); color: #fff; }
+.bus-pin span { margin-top: 4px; background: #fff; border: 1px solid #e2e8f0; border-radius: 7px; padding: 4px 7px; font-size: 9px; font-weight: 800; color: var(--primary); }
+.pin-one { left: 28%; top: 43%; }
+.pin-two { right: 22%; top: 28%; }
+.pin-three { left: 55%; bottom: 20%; }
+.map-key { position: absolute; left: 12px; bottom: 12px; background: rgba(255,255,255,.96); border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; font-size: 9px; z-index: 5; }
+.map-key div { margin-top: 4px; }
+.map-key i { color: var(--primary); margin-right: 5px; }
+.fleet-panel { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.fleet-title { display: flex; justify-content: space-between; align-items: center; }
+.fleet-title h3 { margin: 0; font-family: 'Outfit'; color: var(--primary); font-size: 16px; }
+.fleet-title span { font-size: 10px; color: var(--logo-color-2,var(--secondary)); background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 999px; padding: 4px 8px; }
+.bus-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 11px; box-shadow: 0 4px 14px rgba(15,23,42,.04); transition: border-color .2s, transform .2s; }
+.bus-card:hover { border-color: var(--primary); transform: translateY(-1px); }
+.bus-card-head { display: flex; justify-content: space-between; }
+.bus-card-name { display: flex; gap: 8px; }
+.bus-number { width: 34px; height: 34px; border-radius: 8px; background: rgba(var(--accent-rgb),.12); border: 1px solid rgba(var(--accent-rgb),.4); color: var(--primary); display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 12px; }
+.bus-card h4 { margin: 1px 0 2px; color: var(--primary); font-size: 12px; }
+.bus-card p { margin: 0; color: #64748b; font-size: 9px; }
+.bus-status { font-size: 9px; font-weight: 800; color: var(--logo-color-3,var(--accent)); background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 999px; padding: 3px 7px; }
+.bus-meta { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; border-top: 1px solid #f1f5f9; margin-top: 8px; padding-top: 7px; }
+.bus-meta span { display: block; font-size: 8px; text-transform: uppercase; color: #94a3b8; font-weight: 800; }
+.bus-meta strong { font-size: 10px; color: #334155; }
+.load-bar { height: 5px; background: #f1f5f9; border-radius: 999px; margin-top: 7px; overflow: hidden; }
+.load-bar i { display: block; height: 100%; background: var(--primary); border-radius: 999px; }
+.portal-section { padding: 34px 20px; background: var(--primary); color: #fff; }
+.portal-section .section-head { text-align: center; display: block; margin-bottom: 16px; }
+.portal-section .section-head h2 { color: #fff; font-size: 24px; }
+.portal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.portal-card { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); border-radius: 12px; padding: 18px; }
+.portal-card h3 { color: #fff; margin: 7px 0 5px; font-family: 'Outfit'; font-size: 16px; }
+.portal-card p { color: #cbd5e1; font-size: 11px; line-height: 1.55; margin: 0; }
+.portal-icon { width: 36px; height: 36px; border-radius: 9px; background: rgba(var(--accent-rgb),.16); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 15px; }
+.portal-card:nth-child(1) .portal-icon { background: var(--logo-color-1,var(--primary)); color: #fff; }
+.portal-card:nth-child(2) .portal-icon { background: var(--logo-color-3,var(--accent)); color: #fff; }
+.portal-card ul { padding: 0; margin: 10px 0; list-style: none; }
+.portal-card li { color: #cbd5e1; font-size: 10px; margin: 5px 0; }
+.portal-card li i { color: var(--accent); margin-right: 6px; }
+.map-stop-icon { color: var(--logo-color-3,var(--accent)) !important; }
+.portal-card .atu-btn-light { border: 0; }
+.features { padding: 34px 20px; background: #fff; border-bottom: 1px solid #e2e8f0; }
+.features .section-head { display: block; text-align: center; margin-bottom: 16px; }
+.features .section-head h2 { font-size: 24px; }
+.feature-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; }
+.feature-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; }
+.feature-card i { width: 34px; height: 34px; border-radius: 8px; background: rgba(var(--accent-rgb),.12); color: var(--primary); display: flex; align-items: center; justify-content: center; margin-bottom: 9px; font-size: 13px; }
+.feature-card:nth-child(3n+1) i { background: var(--logo-color-1,var(--accent)); color: #fff; }
+.feature-card:nth-child(3n+2) i { background: var(--logo-color-2,var(--secondary)); color: #fff; }
+.feature-card:nth-child(3n) i { background: var(--logo-color-3,var(--accent)); color: #fff; }
+.feature-card h3 { font-family: 'Outfit'; font-size: 13px; color: var(--primary); margin: 0 0 5px; }
+.feature-card p { font-size: 10px; line-height: 1.55; color: #64748b; margin: 0; }
+@media (max-width:900px) {
+  .metrics,.feature-grid{grid-template-columns:repeat(2,1fr)}
+  .radar-grid,.portal-grid{grid-template-columns:1fr}
+  .route-fields{grid-template-columns:1fr 26px 1fr}
+  .route-picker .atu-btn{grid-column:1/-1}
+  .atu-hero h1{font-size:44px}
+}
+@media (max-width:600px) {
+  .atu-hero{padding:28px 14px 34px}
+  .atu-hero h1{font-size:34px}
+  .atu-hero-copy{font-size:13px}
+  .metrics,.feature-grid{grid-template-columns:1fr}
+  .route-fields{grid-template-columns:1fr}
+  .route-arrow{display:none}
+  .route-picker-head strong{display:none}
+  .radar-section,.portal-section,.features{padding-left:14px;padding-right:14px}
+  .radar-map{height:360px}
+  .live-pill{border-radius:12px}
+  .live-pill span:last-child{display:none}
+}
+.atu-btn-light:hover,.atu-btn-muted:hover { color: var(--primary); }
+.live-dot { background: var(--logo-color-3,var(--accent)); }
+.atu-emblem-inner { background: var(--logo-color-1,var(--primary)); color: var(--logo-color-3,var(--accent)); }
+.atu-emblem-inner span { color: var(--logo-color-2,var(--secondary)); }
+.atu-actions > .atu-btn-light { color: var(--logo-color-2,var(--secondary)); border-color: var(--logo-color-2,var(--secondary)); }
+.metric:nth-child(3n+1),.feature-card:nth-child(3n+1) { border-top: 3px solid var(--logo-color-1,var(--primary)); }
+.metric:nth-child(3n+2),.feature-card:nth-child(3n+2) { border-top: 3px solid var(--logo-color-2,var(--secondary)); }
+.metric:nth-child(3n),.feature-card:nth-child(3n) { border-top: 3px solid var(--logo-color-3,var(--accent)); }
+.metric:nth-child(3n+1) .metric-icon,.feature-card:nth-child(3n+1) > i { color: var(--logo-color-1,var(--primary)); }
+.metric:nth-child(3n+2) .metric-icon,.feature-card:nth-child(3n+2) > i { color: var(--logo-color-2,var(--secondary)); }
+.metric:nth-child(3n) .metric-icon,.feature-card:nth-child(3n) > i { color: var(--logo-color-3,var(--accent)); }
+.metric:nth-child(3n+1) > strong { color: var(--logo-color-1,var(--primary)); }
+.metric:nth-child(3n+2) > strong { color: var(--logo-color-2,var(--secondary)); }
+.metric:nth-child(3n) > strong { color: var(--logo-color-3,var(--accent)); }
+.eyebrow { color: var(--logo-color-3,var(--accent)); }
+.map-strip { background: var(--logo-color-2,var(--secondary)); }
+.campus-route { stroke: var(--logo-color-1,var(--primary)); }
+.campus-stop { fill: var(--logo-color-3,var(--accent)); }
+.bus-pin:nth-of-type(1) i { background: var(--logo-color-1,var(--primary)); color: #fff; }
+.bus-pin:nth-of-type(2) i { background: var(--logo-color-2,var(--secondary)); color: #fff; }
+.bus-pin:nth-of-type(3) i { background: var(--logo-color-3,var(--accent)); color: #fff; }
+.bus-card:nth-of-type(1) { border-left: 3px solid var(--logo-color-1,var(--primary)); }
+.bus-card:nth-of-type(2) { border-left: 3px solid var(--logo-color-2,var(--secondary)); }
+.bus-card:nth-of-type(3) { border-left: 3px solid var(--logo-color-3,var(--accent)); }
+.bus-card:nth-of-type(1) .bus-number,.bus-card:nth-of-type(1) .load-bar i { background: var(--logo-color-1,var(--primary)); color: #fff; }
+.bus-card:nth-of-type(2) .bus-number,.bus-card:nth-of-type(2) .load-bar i { background: var(--logo-color-2,var(--secondary)); color: #fff; }
+.bus-card:nth-of-type(3) .bus-number,.bus-card:nth-of-type(3) .load-bar i { background: var(--logo-color-3,var(--accent)); color: #fff; }
+.portal-section { background: var(--logo-color-2,var(--secondary)); }
+.portal-card:nth-child(1) { border-top: 3px solid var(--logo-color-1,var(--primary)); }
+.portal-card:nth-child(2) { border-top: 3px solid var(--logo-color-3,var(--accent)); }
+.portal-card:nth-child(1) .portal-icon { background: var(--logo-color-1,var(--primary)); color: #fff; }
+.portal-card:nth-child(2) .portal-icon { background: var(--logo-color-3,var(--accent)); color: #fff; }
+.portal-card li i { color: var(--logo-color-3,var(--accent)); }
+.feature-card:nth-child(3n+1) > i { background: var(--logo-color-1,var(--primary)); color: #fff; }
+.feature-card:nth-child(3n+2) > i { background: var(--logo-color-2,var(--secondary)); color: #fff; }
+.feature-card:nth-child(3n) > i { background: var(--logo-color-3,var(--accent)); color: #fff; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="atu-home">
+<section class="atu-hero" id="hero">
+  <div class="atu-container atu-hero-inner">
+    <div class="live-pill"><span class="live-dot"></span><strong>{% if buses %}{{ buses|length }} Active Fleet Unit{{ buses|length|pluralize }}{% else %}No Active Fleet Units{% endif %}</strong><span>• {% if buses %}Campus fleet status{% else %}Check back for updates{% endif %}</span></div>
+    <div class="atu-emblem"><div class="atu-emblem-inner"><i class="fa-solid fa-bus"></i><span>{{ school.school_name|default:'ATU GPS' }}</span></div></div>
+    <h1>{{ school.school_name|default:'ATU SCHOOL SHUTTLE' }}</h1>
+    <p class="atu-hero-copy">{{ school.description|default:'Track live campus shuttle locations, avoid delays, and commute seamlessly across lecture halls, residential areas, and campus facilities.' }}</p>
+    <div class="atu-actions">
+      <a href="/tracking/" class="atu-btn atu-btn-primary"><i class="fa-solid fa-map-location-dot"></i> Track Live Shuttle</a>
+      {% if not user.is_authenticated %}<a href="{% url 'accounts:login' %}" class="atu-btn atu-btn-light"><i class="fa-solid fa-id-card"></i> Portal Sign In</a>{% endif %}
+      <a href="#routes-schedules" class="atu-btn atu-btn-muted"><i class="fa-regular fa-clock"></i> View Timetable</a>
+    </div>
+    <div class="route-picker">
+      <div class="route-picker-head"><span><i class="fa-solid fa-compass"></i> WHERE ARE YOU GOING TODAY?</span><strong>LIVE ROUTES AVAILABLE</strong></div>
+      <div class="route-fields">
+        <div class="route-field"><label>PICKUP POINT</label><select><option>Main Gate Terminus</option>{% for bus in buses %}{% if bus.route %}<option>{{ bus.route.start_location }}</option>{% endif %}{% endfor %}</select></div>
+        <div class="route-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+        <div class="route-field"><label>DESTINATION STOP</label><select><option>Campus Main Stop</option>{% for bus in buses %}{% if bus.route %}<option>{{ bus.route.destination }}</option>{% endif %}{% endfor %}</select></div>
+        <a href="/tracking/" class="atu-btn atu-btn-primary"><i class="fa-solid fa-magnifying-glass"></i> Find Next</a>
+      </div>
+    </div>
+    <div class="metrics">
+      <div class="metric"><div class="metric-top"><span>Active Shuttles</span><span class="metric-icon"><i class="fa-solid fa-van-shuttle"></i></span></div><strong>{{ buses|length }}</strong><span>Fleet units available</span></div>
+      <div class="metric"><div class="metric-top"><span>Average Wait</span><span class="metric-icon"><i class="fa-regular fa-clock"></i></span></div><strong>6 mins</strong><span>Across campus routes</span></div>
+      <div class="metric"><div class="metric-top"><span>On-Time Rate</span><span class="metric-icon"><i class="fa-regular fa-circle-check"></i></span></div><strong>98.2%</strong><span>Within departure window</span></div>
+      <div class="metric"><div class="metric-top"><span>Campus Coverage</span><span class="metric-icon"><i class="fa-solid fa-route"></i></span></div><strong>{% if buses %}{{ buses|length }} Routes{% else %}Live{% endif %}</strong><span>Designated shuttle lines</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="radar-section" id="tracking-dashboard">
+  <div class="atu-container">
+    <div class="section-head"><div><span class="eyebrow">Interactive Radar Feed</span><h2>Live Campus Map &amp; Shuttle Radar</h2></div></div>
+    <div class="radar-grid">
+      <div class="radar-map">
+        <div class="map-strip"><span><i class="fa-solid fa-satellite-dish"></i> Campus Route Overview</span><span>Fleet Status</span></div>
+        <div class="map-canvas">
+          <svg class="campus-map-svg" viewBox="0 0 760 320" role="img" aria-label="Campus shuttle route overview">
+            <rect width="760" height="320" fill="#edf3f8"/>
+            <g opacity=".55">
+              <rect x="36" y="32" width="84" height="54" rx="8" class="campus-building"/>
+              <rect x="148" y="22" width="72" height="64" rx="8" class="campus-building"/>
+              <rect x="508" y="28" width="92" height="58" rx="8" class="campus-building"/>
+              <rect x="620" y="64" width="96" height="58" rx="8" class="campus-building"/>
+              <rect x="70" y="210" width="112" height="68" rx="8" class="campus-building"/>
+              <rect x="286" y="222" width="92" height="56" rx="8" class="campus-building"/>
+              <rect x="540" y="212" width="116" height="70" rx="8" class="campus-building"/>
+            </g>
+            <path d="M-20 128 C95 112 155 136 244 118 S414 95 498 118 S650 152 780 132" class="campus-road-edge"/>
+            <path d="M-20 128 C95 112 155 136 244 118 S414 95 498 118 S650 152 780 132" class="campus-road"/>
+            <path d="M102 338 C130 260 178 224 240 194 S390 155 444 122 S510 62 544 -20" class="campus-road-edge"/>
+            <path d="M102 338 C130 260 178 224 240 194 S390 155 444 122 S510 62 544 -20" class="campus-road"/>
+            <path d="M28 272 C122 248 194 286 278 262 S430 238 516 262 S624 284 744 238" class="campus-road-edge"/>
+            <path d="M28 272 C122 248 194 286 278 262 S430 238 516 262 S624 284 744 238" class="campus-road"/>
+            <path d="M70 236 C120 212 196 216 250 196 S355 126 420 118 S500 126 540 150 S625 178 690 166" class="campus-route"/>
+            <circle cx="70" cy="236" r="7" class="campus-stop"/>
+            <circle cx="250" cy="196" r="7" class="campus-stop"/>
+            <circle cx="420" cy="118" r="7" class="campus-stop"/>
+            <circle cx="690" cy="166" r="7" class="campus-stop"/>
+            <text x="42" y="180" class="campus-label">MAIN CAMPUS GATE</text>
+            <text x="175" y="82" class="campus-label">ACADEMIC BLOCKS</text>
+            <text x="462" y="86" class="campus-label">ENGINEERING</text>
+            <text x="606" y="188" class="campus-label">SPORTS COMPLEX</text>
+            <text x="266" y="296" class="campus-label">CENTRAL QUAD</text>
+          </svg>
+          {% for bus in buses|slice:":3" %}
+          <div class="bus-pin pin-{% if forloop.counter == 1 %}one{% elif forloop.counter == 2 %}two{% else %}three{% endif %}">
+            <i class="fa-solid fa-bus"></i>
+            <span>Bus {{ bus.bus_number }} · {{ bus.get_status_display }}</span>
+          </div>
+          {% endfor %}
+          <div class="map-key"><strong>TRANSIT ROUTE KEY</strong><div><i class="fa-solid fa-location-dot"></i> Active shuttle</div><div><i class="fa-solid fa-circle map-stop-icon"></i> Campus stop</div></div>
+        </div>
+      </div>
+      <div class="fleet-panel">
+        <div class="fleet-title"><h3>Active Fleet Units</h3><span><i class="fa-solid fa-circle"></i> {% if buses %}Active{% else %}Offline{% endif %}</span></div>
+        {% for bus in buses|slice:":3" %}
+        <article class="bus-card" onclick="window.location.href='{% url "tracking:live_tracking" bus.pk %}'" style="cursor:pointer">
+          <div class="bus-card-head"><div class="bus-card-name"><div class="bus-number">{{ bus.bus_number|slice:"0:2" }}</div><div><h4>Bus {{ bus.bus_number }}</h4><p><i class="fa-solid fa-id-badge"></i> {{ bus.driver_name }}</p></div></div><span class="bus-status">{{ bus.get_status_display }}</span></div>
+          <div class="bus-meta"><div><span>Route</span><strong>{{ bus.route_name }}</strong></div><div><span>Capacity</span><strong>{{ bus.occupied_seats }}/{{ bus.capacity }}</strong></div><div><span>Seats</span><strong>{{ bus.available_seats }}</strong></div></div>
+          <div class="load-bar"><i style="width:{% widthratio bus.occupied_seats bus.capacity 100 %}%"></i></div>
+        </article>
+        {% empty %}
+        <article class="bus-card"><div class="bus-card-head"><div><h4>No active shuttle units</h4><p>Fleet information will appear here when buses are available.</p></div></div></article>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="portal-section" id="student-portal">
+  <div class="atu-container">
+    <div class="section-head"><span class="eyebrow">Authenticated Access</span><h2>Campus Transit Access Hub</h2></div>
+    <div class="portal-grid">
+      <article class="portal-card" id="student-card"><div class="portal-icon"><i class="fa-solid fa-user-graduate"></i></div><h3>Student Transit Pass &amp; Ride Alerts</h3><p>Access live shuttle information, bookmarks, wait estimates, and ride notifications from one campus portal.</p><ul><li><i class="fa-solid fa-circle-check"></i> Real-time route and shuttle status</li><li><i class="fa-solid fa-circle-check"></i> Capacity alerts and trip updates</li></ul>{% if not user.is_authenticated %}<a href="{% url 'accounts:login' %}" class="atu-btn atu-btn-primary">Student Sign In <i class="fa-solid fa-arrow-right"></i></a>{% else %}<a href="/tracking/" class="atu-btn atu-btn-primary">Track Shuttle <i class="fa-solid fa-arrow-right"></i></a>{% endif %}</article>
+      <article class="portal-card" id="driver-portal"><div class="portal-icon"><i class="fa-solid fa-id-card"></i></div><h3>Driver Operations &amp; Route Logging</h3><p>Clock into assigned shifts, broadcast GPS telemetry, and update passenger capacity for campus dispatch.</p><ul><li><i class="fa-solid fa-circle-check"></i> Live shift and passenger head-count</li><li><i class="fa-solid fa-circle-check"></i> Incident reporting and route updates</li></ul>{% if not user.is_authenticated %}<a href="{% url 'accounts:login' %}" class="atu-btn atu-btn-light">Driver Dispatch Login <i class="fa-solid fa-arrow-right"></i></a>{% else %}<a href="/accounts/driver/" class="atu-btn atu-btn-light">Open Driver Dashboard <i class="fa-solid fa-arrow-right"></i></a>{% endif %}</article>
+    </div>
+  </div>
+</section>
+
+<section class="features" id="routes-schedules">
+  <div class="atu-container"><div class="section-head"><span class="eyebrow">Built For Campus Community</span><h2>Smart Campus Mobility Designed for ATU</h2></div><div class="feature-grid">
+    <article class="feature-card"><i class="fa-solid fa-satellite-dish"></i><h3>Real-Time GPS Telemetry</h3><p>Pinpoint shuttle locations on campus with continuous live updates.</p></article>
+    <article class="feature-card"><i class="fa-regular fa-calendar-check"></i><h3>Scheduled Routes</h3><p>Review route stops and plan your university schedule with confidence.</p></article>
+    <article class="feature-card"><i class="fa-solid fa-shield-halved"></i><h3>Student Safety</h3><p>Operate with monitored vehicles and secure campus transport procedures.</p></article>
+    <article class="feature-card"><i class="fa-solid fa-bullhorn"></i><h3>Instant Fleet Updates</h3><p>Stay informed about route changes, substitutions, and fleet status.</p></article>
+  </div></div>
+</section>
+</div>
+{% endblock %}

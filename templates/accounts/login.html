@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% block title %}Login{% endblock %}
+
+{% block body_class %}auth-page{% endblock %}
+{% block footer %}{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="auth-header">
+            {% if school.logo and school.logo.name %}
+            <img src="{{ school.logo.url }}" alt="{{ school.school_name }}" class="auth-logo">
+            {% else %}
+            <div class="auth-icon">🚌</div>
+            {% endif %}
+            <h1 class="auth-title">Welcome Back</h1>
+            <p class="auth-subtitle">{{ school.school_name }}</p>
+        </div>
+
+        <form method="post" class="auth-form">
+            {% csrf_token %}
+
+            <div class="form-group">
+                <label for="id_username" class="form-label">Email or username</label>
+                <input type="text" name="username" id="id_username"
+                       class="form-input {% if form.username.errors %}input-error{% endif %}"
+                       placeholder="Enter your email or username" autofocus required>
+                {% for error in form.username.errors %}
+                <span class="field-error">{{ error }}</span>
+                {% endfor %}
+            </div>
+
+            <div class="form-group">
+                <label for="id_password" class="form-label">Password</label>
+                <div class="input-with-toggle">
+                    <input type="password" name="password" id="id_password"
+                           class="form-input {% if form.non_field_errors %}input-error{% endif %}"
+                           placeholder="Enter your password" required>
+                    <button type="button" class="toggle-password" onclick="togglePassword()">👁</button>
+                </div>
+                {% for error in form.non_field_errors %}
+                <span class="field-error">{{ error }}</span>
+                {% endfor %}
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-full btn-lg">
+                Login
+            </button>
+        </form>
+
+        <div class="auth-footer">
+            <p><a href="{% url 'accounts:admin_recovery' %}">Forgot the administrator email or password?</a></p>
+            <p><a href="{% url 'accounts:auth_landing' %}">← Back to Roles</a></p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function togglePassword() {
+    const input = document.getElementById('id_password');
+    input.type = input.type === 'password' ? 'text' : 'password';
+}
+</script>
+{% endblock %}

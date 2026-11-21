@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% block title %}Track Shuttle Buses{% endblock %}
+
+{% block content %}
+<div class="container section">
+    <div class="section-header">
+        <h1>🚌 Live Shuttle Tracking</h1>
+        <p>Plan your journey first, or select a bus below to see its live location.</p>
+        <a href="{% url 'tracking:journey_planner' %}" class="btn btn-primary">Plan my trip</a>
+    </div>
+
+    {% if buses %}
+    <div class="bus-grid">
+        {% for bus in buses %}
+        <a href="/tracking/{{ bus.pk }}/" class="bus-card bus-card-large status-{{ bus.status }}">
+            <div class="bus-card-header">
+                <div class="bus-icon-wrap">
+                    <span class="bus-icon">🚌</span>
+                    <span class="bus-num">{{ bus.bus_number }}</span>
+                </div>
+                <span class="status-badge status-{{ bus.status }}">
+                    {% if bus.status == 'moving' %}🟢 Moving
+                    {% elif bus.status == 'stopped' %}🟡 Stopped
+                    {% else %}⚫ Offline{% endif %}
+                </span>
+            </div>
+            <div class="bus-card-body">
+                {% if bus.route %}
+                <div class="route-info">
+                    <span class="route-from">📍 {{ bus.route.start_location }}</span>
+                    <span class="route-arrow">→</span>
+                    <span class="route-to">🏁 {{ bus.route.destination }}</span>
+                </div>
+                <p class="route-name-label">{{ bus.route.name }}</p>
+                {% else %}
+                <p class="text-muted">No route assigned</p>
+                {% endif %}
+                <p class="bus-driver-label">👤 {{ bus.driver_name }}</p>
+            </div>
+            <div class="bus-card-footer">
+                <span class="track-cta">View Live Map →</span>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-icon">🚌</div>
+        <h2>No Active Buses</h2>
+        <p>There are no active shuttle buses at the moment. Please check back later.</p>
+        <a href="/" class="btn btn-primary">← Back to Home</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

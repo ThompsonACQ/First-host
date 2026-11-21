@@ -1,0 +1,389 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }}{% endblock %}
+{% block body_class %}admin-page{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+{% endblock %}
+
+{% block content %}
+<div class="admin-layout">
+    {% include "admin_dashboard/_sidebar.html" %}
+
+    <div class="admin-main">
+        <div class="admin-topbar">
+            <h1 class="admin-page-title">{{ title }}</h1>
+            <a href="{% url 'routes:route_list' %}" class="btn btn-outline">← Back to Routes</a>
+        </div>
+
+        <div class="dashboard-section">
+            <div class="form-container-md">
+                <form method="post" class="admin-form">
+                    {% csrf_token %}
+                    
+                    <!-- Map Picker Section -->
+                    <div class="map-picker-container" style="margin-bottom: 2rem; padding: 1rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                            <h3 style="margin: 0;">Interactive Map Picker</h3>
+                            <span id="map-target-indicator" style="font-weight: 600; color: var(--primary); background: rgba(var(--primary-rgb),0.1); padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.9rem;">Target: None selected</span>
+                        </div>
+                        <!-- Stage 3: Geocoding Search -->
+                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem; position: relative;">
+                            <input type="text" id="geocode-search" placeholder="🔍 Search for a place, e.g. CBG Bank, Accra..." style="flex:1; padding: 0.6rem 1rem; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; font-family: inherit;">
+                            <button type="button" id="geocode-btn" class="btn btn-primary btn-sm" style="white-space: nowrap;">🔍 Search</button>
+                        </div>
+                        <ul id="geocode-results" style="list-style:none; margin: 0 0 0.75rem; padding: 0; background: white; border: 1px solid #e2e8f0; border-radius: 8px; max-height: 200px; overflow-y: auto; display: block;"></ul>
+                        <div id="map-picker" style="height: 400px; border-radius: 8px; border: 1px solid #cbd5e1; z-index: 1;"></div>
+                        <p id="map-hint" style="font-size: 0.85rem; color: #64748b; margin-top: 0.5rem;">
+                            ① Click <strong>"📍 Pick on Map"</strong> next to any field below → ② Use the search or click the map to drop a pin → ③ Drag the pin to fine-tune.
+                        </p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="{{ form.name.id_for_label }}">Route Name <span class="required">*</span></label>
+                        {{ form.name }}
+                        {{ form.name.errors }}
+                    </div>
+                    
+                    <div class="form-group checkbox-group">
+                        <label>
+                            {{ form.active }}
+                            <span>Route is active</span>
+                        </label>
+                        {{ form.active.errors }}
+                    </div>
+
+                    <div class="form-group">
+                        <label for="{{ form.description.id_for_label }}">Description</label>
+                        {{ form.description }}
+                        {{ form.description.errors }}
+                    </div>
+
+                    <h3 class="form-section-title">Start Location</h3>
+                    <div class="form-row align-items-end" style="align-items: flex-end;">
+                        <div class="form-group full">
+                            <label for="{{ form.start_location.id_for_label }}">Start Name (e.g., Main Campus) <span class="required">*</span></label>
+                            {{ form.start_location }}
+                            {{ form.start_location.errors }}
+                        </div>
+                        <div class="form-group half">
+                            <label for="{{ form.start_latitude.id_for_label }}">Latitude</label>
+                            {{ form.start_latitude }}
+                            {{ form.start_latitude.errors }}
+                        </div>
+                        <div class="form-group half">
+                            <label for="{{ form.start_longitude.id_for_label }}">Longitude</label>
+                            {{ form.start_longitude }}
+                            {{ form.start_longitude.errors }}
+                        </div>
+                        <div class="form-group" style="padding-bottom: 0.5rem;">
+                            <button type="button" class="btn btn-outline btn-sm pick-map-btn" data-lat-target="{{ form.start_latitude.id_for_label }}" data-lng-target="{{ form.start_longitude.id_for_label }}" data-name="Start Location">📍 Pick on Map</button>
+                        </div>
+                    </div>
+
+                    <h3 class="form-section-title">Destination</h3>
+                    <div class="form-row align-items-end" style="align-items: flex-end;">
+                        <div class="form-group full">
+                            <label for="{{ form.destination.id_for_label }}">Destination Name (e.g., Downtown Station) <span class="required">*</span></label>
+                            {{ form.destination }}
+                            {{ form.destination.errors }}
+                        </div>
+                        <div class="form-group half">
+                            <label for="{{ form.destination_latitude.id_for_label }}">Latitude</label>
+                            {{ form.destination_latitude }}
+                            {{ form.destination_latitude.errors }}
+                        </div>
+                        <div class="form-group half">
+                            <label for="{{ form.destination_longitude.id_for_label }}">Longitude</label>
+                            {{ form.destination_longitude }}
+                            {{ form.destination_longitude.errors }}
+                        </div>
+                        <div class="form-group" style="padding-bottom: 0.5rem;">
+                            <button type="button" class="btn btn-outline btn-sm pick-map-btn" data-lat-target="{{ form.destination_latitude.id_for_label }}" data-lng-target="{{ form.destination_longitude.id_for_label }}" data-name="Destination">📍 Pick on Map</button>
+                        </div>
+                    </div>
+
+                    <h3 class="form-section-title">Route Stops</h3>
+                    <p class="form-help mb-3">Add intermediate stops between the start and destination.</p>
+                    
+                    {{ formset.management_form }}
+                    <div id="stops-container">
+                        {% for stop_form in formset %}
+                        <div class="stop-form-row">
+                            {% for hidden in stop_form.hidden_fields %}
+                                {{ hidden }}
+                            {% endfor %}
+                            <div class="form-row align-items-end" style="align-items: flex-end;">
+                                <div class="form-group col-1">
+                                    <label>Order</label>
+                                    {{ stop_form.stop_order }}
+                                </div>
+                                <div class="form-group col-3">
+                                    <label>Stop Name</label>
+                                    {{ stop_form.name }}
+                                </div>
+                                <div class="form-group col-2">
+                                    <label>Lat</label>
+                                    {{ stop_form.latitude }}
+                                </div>
+                                <div class="form-group col-2">
+                                    <label>Lng</label>
+                                    {{ stop_form.longitude }}
+                                </div>
+                                <div class="form-group col-2" style="padding-bottom: 0.5rem;">
+                                    <button type="button" class="btn btn-outline btn-sm pick-map-btn" style="padding: 0.4rem;" data-lat-target="{{ stop_form.latitude.id_for_label }}" data-lng-target="{{ stop_form.longitude.id_for_label }}" data-name="Route Stop">📍 Pick</button>
+                                </div>
+                                <div class="form-group col-1 delete-col" style="padding-bottom: 0.5rem;">
+                                    {% if stop_form.instance.pk %}
+                                        <label>Del</label>
+                                        {{ stop_form.DELETE }}
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="form-actions mt-4">
+                        <button type="submit" class="btn btn-primary btn-lg">Save Route</button>
+                        <a href="{% url 'routes:route_list' %}" class="btn btn-outline btn-lg">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+
+    // ── 1. Map initialisation ─────────────────────────────────────────────────
+    // Try to center on the first saved coordinate pair already in the form;
+    // fall back to Accra, Ghana as a sensible default.
+    function firstSavedCoord() {
+        const latIds = [
+            'id_start_latitude', 'id_destination_latitude'
+        ];
+        for (const id of latIds) {
+            const latEl = document.getElementById(id);
+            const lngEl = document.getElementById(id.replace('latitude', 'longitude'));
+            if (latEl && latEl.value && lngEl && lngEl.value) {
+                return [parseFloat(latEl.value), parseFloat(lngEl.value)];
+            }
+        }
+        // Also check stop formset rows
+        document.querySelectorAll('[id$="-latitude"]').forEach(function(el) {
+            if (el.value) {
+                const lngEl = document.getElementById(el.id.replace('-latitude', '-longitude'));
+                if (lngEl && lngEl.value) {
+                    return [parseFloat(el.value), parseFloat(lngEl.value)];
+                }
+            }
+        });
+        return [5.6037, -0.1870]; // Default: Accra
+    }
+
+    const initCenter = firstSavedCoord();
+    const map = L.map('map-picker').setView(initCenter, 13);
+    L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+        {
+            maxZoom: 19,
+            attribution: 'Tiles &copy; <a href="https://www.esri.com/">Esri</a> &mdash; Sources: Esri, HERE, Garmin, FAO, NOAA, USGS, OpenStreetMap contributors'
+        }
+    ).addTo(map);
+
+    let pickerMarker = null;   // The single draggable "active" marker
+    let activeLatInput = null;
+    let activeLngInput = null;
+    const targetIndicator = document.getElementById('map-target-indicator');
+
+    // ── Helper: attach dragend to a marker ───────────────────────────────────
+    function attachDragEnd(marker) {
+        marker.on('dragend', function(e) {
+            const pos = e.target.getLatLng();
+            if (activeLatInput && activeLngInput) {
+                document.getElementById(activeLatInput).value = pos.lat.toFixed(6);
+                document.getElementById(activeLngInput).value = pos.lng.toFixed(6);
+            }
+        });
+    }
+
+    // ── Helper: place or move the draggable picker marker ───────────────────
+    function placePickerMarker(lat, lng) {
+        if (!pickerMarker) {
+            pickerMarker = L.marker([lat, lng], { draggable: true, zIndexOffset: 1000 }).addTo(map);
+            attachDragEnd(pickerMarker);
+        } else {
+            pickerMarker.setLatLng([lat, lng]);
+        }
+    }
+
+    // ── 2. Map click to drop pin ──────────────────────────────────────────────
+    map.on('click', function(e) {
+        if (!activeLatInput || !activeLngInput) {
+            // Pulse the instruction paragraph briefly to draw attention
+            const hint = document.getElementById('map-hint');
+            if (hint) { hint.style.color = '#ef4444'; setTimeout(() => hint.style.color = '', 1500); }
+            return;
+        }
+        const { lat, lng } = e.latlng;
+        placePickerMarker(lat, lng);
+        document.getElementById(activeLatInput).value = lat.toFixed(6);
+        document.getElementById(activeLngInput).value = lng.toFixed(6);
+    });
+
+    // ── 3. "Pick on Map" button activation ───────────────────────────────────
+    const pickButtons = document.querySelectorAll('.pick-map-btn');
+    pickButtons.forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+
+            // Deactivate all, activate this one
+            pickButtons.forEach(function(b) {
+                b.classList.remove('btn-primary');
+                b.classList.add('btn-outline');
+            });
+            this.classList.remove('btn-outline');
+            this.classList.add('btn-primary');
+
+            activeLatInput = this.getAttribute('data-lat-target');
+            activeLngInput = this.getAttribute('data-lng-target');
+            const name = this.getAttribute('data-name');
+            targetIndicator.innerText = 'Target: ' + name;
+
+            // If fields already have coords, center map there
+            const curLat = document.getElementById(activeLatInput)
+                           ? document.getElementById(activeLatInput).value : '';
+            const curLng = document.getElementById(activeLngInput)
+                           ? document.getElementById(activeLngInput).value : '';
+
+            if (curLat && curLng) {
+                const lat = parseFloat(curLat), lng = parseFloat(curLng);
+                map.setView([lat, lng], 16);
+                placePickerMarker(lat, lng);
+            }
+
+            // Scroll smoothly to map
+            document.querySelector('.map-picker-container')
+                    .scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+    });
+
+    // ── Stage 3: Nominatim geocoding search ──────────────────────────────────
+    const searchInput = document.getElementById('geocode-search');
+    const searchBtn   = document.getElementById('geocode-btn');
+    const searchResults = document.getElementById('geocode-results');
+
+    function doSearch() {
+        const query = searchInput.value.trim();
+        if (!query) return;
+
+        searchBtn.textContent = '⏳';
+        searchBtn.disabled = true;
+        searchResults.innerHTML = '';
+
+        fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(query)}`, {
+            headers: { 'Accept-Language': 'en' }
+        })
+        .then(r => r.json())
+        .then(function(results) {
+            searchBtn.textContent = '🔍 Search';
+            searchBtn.disabled = false;
+
+            if (!results.length) {
+                searchResults.innerHTML = '<li style="padding:0.5rem;color:#64748b;">No results found.</li>';
+                return;
+            }
+
+            results.forEach(function(result) {
+                const li = document.createElement('li');
+                li.textContent = result.display_name;
+                li.style.cssText = 'padding:0.5rem 0.75rem;cursor:pointer;border-bottom:1px solid #e2e8f0;font-size:0.85rem;';
+                li.addEventListener('mouseenter', () => li.style.background = '#f1f5f9');
+                li.addEventListener('mouseleave', () => li.style.background = '');
+                li.addEventListener('click', function() {
+                    const lat = parseFloat(result.lat);
+                    const lng = parseFloat(result.lon);
+                    map.setView([lat, lng], 16);
+                    placePickerMarker(lat, lng);
+
+                    // Also fill in the active lat/lng fields if a target is active
+                    if (activeLatInput && activeLngInput) {
+                        document.getElementById(activeLatInput).value = lat.toFixed(6);
+                        document.getElementById(activeLngInput).value = lng.toFixed(6);
+                    }
+                    searchResults.innerHTML = '';
+                    searchInput.value = result.display_name.split(',')[0];
+                });
+                searchResults.appendChild(li);
+            });
+        })
+        .catch(function() {
+            searchBtn.textContent = '🔍 Search';
+            searchBtn.disabled = false;
+            searchResults.innerHTML = '<li style="padding:0.5rem;color:#ef4444;">Search failed. Check your connection.</li>';
+        });
+    }
+
+    if (searchBtn) {
+        searchBtn.addEventListener('click', doSearch);
+    }
+    if (searchInput) {
+        searchInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); doSearch(); }
+        });
+    }
+
+    // ── Stage 4: Auto-load existing saved coordinates on edit ────────────────
+    // Plot faded grey markers for every coordinate pair already stored in the form.
+    // This gives the admin a visual overview of the whole route when editing.
+    const savedIcon = L.divIcon({
+        className: '',
+        html: '<div style="width:12px;height:12px;border-radius:50%;background:#94a3b8;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3);"></div>',
+        iconSize: [12, 12],
+        iconAnchor: [6, 6]
+    });
+
+    const savedCoords = [];
+
+    function tryAddSavedMarker(latId, lngId, label) {
+        const latEl = document.getElementById(latId);
+        const lngEl = document.getElementById(lngId);
+        if (latEl && latEl.value && lngEl && lngEl.value) {
+            const lat = parseFloat(latEl.value);
+            const lng = parseFloat(lngEl.value);
+            if (!isNaN(lat) && !isNaN(lng)) {
+                L.marker([lat, lng], { icon: savedIcon })
+                 .addTo(map)
+                 .bindTooltip(label, { permanent: false, direction: 'top' });
+                savedCoords.push([lat, lng]);
+            }
+        }
+    }
+
+    // Start & destination
+    tryAddSavedMarker('id_start_latitude', 'id_start_longitude', 'Start');
+    tryAddSavedMarker('id_destination_latitude', 'id_destination_longitude', 'Destination');
+
+    // Formset stops — Django names them stops-0-latitude, stops-1-latitude, etc.
+    for (let i = 0; i < 20; i++) {
+        tryAddSavedMarker(`id_stops-${i}-latitude`, `id_stops-${i}-longitude`, `Stop ${i + 1}`);
+    }
+
+    // If we found saved markers, fit the map to show them all
+    if (savedCoords.length > 1) {
+        map.fitBounds(savedCoords, { padding: [50, 50] });
+    } else if (savedCoords.length === 1) {
+        map.setView(savedCoords[0], 15);
+    }
+
+});
+</script>
+{% endblock %}
+
+
+

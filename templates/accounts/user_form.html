@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }}{% endblock %}
+{% block body_class %}admin-page{% endblock %}
+
+{% block content %}
+<div class="admin-layout">
+    {% include "admin_dashboard/_sidebar.html" %}
+
+    <div class="admin-main">
+        <div class="admin-topbar">
+            <h1 class="admin-page-title">{{ title }}</h1>
+            <a href="{% url 'accounts:user_list' %}" class="btn btn-outline">← Back to Users</a>
+        </div>
+
+        <div class="dashboard-section">
+            <div class="form-container-md">
+                <form method="post" class="admin-form">
+                    {% csrf_token %}
+                    
+                    {% if form.non_field_errors %}
+                    <div class="form-errors">
+                        {{ form.non_field_errors }}
+                    </div>
+                    {% endif %}
+
+                    {% if 'username' in form.fields %}
+                    <div class="form-group">
+                        <label for="{{ form.username.id_for_label }}">Username <span class="required">*</span></label>
+                        {{ form.username }}
+                        {{ form.username.errors }}
+                    </div>
+                    {% endif %}
+                    
+                    <div class="form-row">
+                        <div class="form-group half">
+                            <label for="{{ form.first_name.id_for_label }}">First Name</label>
+                            {{ form.first_name }}
+                            {{ form.first_name.errors }}
+                        </div>
+                        <div class="form-group half">
+                            <label for="{{ form.last_name.id_for_label }}">Last Name</label>
+                            {{ form.last_name }}
+                            {{ form.last_name.errors }}
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group half">
+                            <label for="{{ form.email.id_for_label }}">Email</label>
+                            {{ form.email }}
+                            {{ form.email.errors }}
+                        </div>
+                        <div class="form-group half">
+                            <label for="{{ form.phone.id_for_label }}">Phone</label>
+                            {{ form.phone }}
+                            {{ form.phone.errors }}
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group half">
+                            <label for="{{ form.role.id_for_label }}">Role <span class="required">*</span></label>
+                            {{ form.role }}
+                            <small class="form-help">Drivers will automatically get a driver profile.</small>
+                            {{ form.role.errors }}
+                        </div>
+                        {% if 'is_active' in form.fields %}
+                        <div class="form-group half checkbox-group" style="align-items: center; justify-content: flex-start;">
+                            <label style="margin-top:20px;">
+                                {{ form.is_active }}
+                                <span>User is active (can login)</span>
+                            </label>
+                            {{ form.is_active.errors }}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    {% if 'password' in form.fields %}
+                    <div class="form-group">
+                        <label for="{{ form.password.id_for_label }}">Password <span class="required">*</span></label>
+                        {{ form.password }}
+                        {{ form.password.errors }}
+                    </div>
+                    {% endif %}
+
+                    <div class="form-actions mt-4">
+                        <button type="submit" class="btn btn-primary btn-lg">Save User</button>
+                        <a href="{% url 'accounts:user_list' %}" class="btn btn-outline btn-lg">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

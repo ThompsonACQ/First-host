@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% block title %}Manage Users{% endblock %}
+{% block body_class %}admin-page{% endblock %}
+
+{% block content %}
+<div class="admin-layout">
+    {% include "admin_dashboard/_sidebar.html" %}
+
+    <div class="admin-main">
+        <div class="admin-topbar">
+            <h1 class="admin-page-title">Manage Users</h1>
+            <a href="{% url 'accounts:user_create' %}" class="btn btn-primary">➕ Add User</a>
+        </div>
+
+        <div class="dashboard-section">
+            {% if users %}
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Full Name</th>
+                            <th>Email</th>
+                            <th>Role / Status</th>
+                            <th>Active Login</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for u in users %}
+                        <tr class="{% if not u.is_active %}row-inactive{% endif %}">
+                            <td><strong>{{ u.username }}</strong></td>
+                            <td>{{ u.get_full_name }}</td>
+                            <td>{{ u.email }}</td>
+                            <td>
+                                <span class="role-badge role-{{ u.role }}">
+                                    {{ u.get_role_display }}
+                                </span>
+                                {% if u.is_driver and u.driver_profile %}
+                                <br>
+                                <small class="text-muted">Status: {{ u.driver_profile.get_status_display }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <form method="post" action="{% url 'accounts:user_toggle_active' u.pk %}" class="inline-form">
+                                    {% csrf_token %}
+                                    {% if u.is_active %}
+                                    <button type="submit" class="btn btn-sm btn-success">Yes</button>
+                                    {% else %}
+                                    <button type="submit" class="btn btn-sm btn-outline">No</button>
+                                    {% endif %}
+                                </form>
+                            </td>
+                            <td class="action-cell">
+                                <a href="{% url 'accounts:user_edit' u.pk %}" class="btn btn-sm btn-primary" title="Edit">✏️</a>
+                                
+                                {% if u.is_driver %}
+                                    {% if u.driver_profile.status != 'APPROVED' %}
+                                    <form method="post" action="{% url 'accounts:driver_approve' u.pk %}" class="inline-form">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-success" title="Approve">✅</button>
+                                    </form>
+                                    {% endif %}
+                                    {% if u.driver_profile.status == 'PENDING' or u.driver_profile.status == 'APPROVED' %}
+                                    <form method="post" action="{% url 'accounts:driver_reject' u.pk %}" class="inline-form">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-danger" title="Reject">❌</button>
+                                    </form>
+                                    {% endif %}
+                                    {% if u.driver_profile.status == 'APPROVED' %}
+                                    <form method="post" action="{% url 'accounts:driver_suspend' u.pk %}" class="inline-form">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-outline" title="Suspend">⏸️</button>
+                                    </form>
+                                    {% endif %}
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-icon">👥</div>
+                <h3>No users found</h3>
+                <p>This should not happen as you are logged in.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

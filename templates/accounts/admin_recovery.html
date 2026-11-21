@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block title %}Administrator Account Recovery{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+{% block footer %}{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="auth-header">
+            {% if school.logo and school.logo.name %}
+            <img src="{{ school.logo.url }}" alt="{{ school.school_name }}" class="auth-logo">
+            {% endif %}
+            <h1 class="auth-title">Recover Administrator Account</h1>
+            <p class="auth-subtitle">Answer all three recovery questions to set a new administrator email and password.</p>
+        </div>
+
+        <form method="post" class="auth-form">
+            {% csrf_token %}
+            {% if form.non_field_errors %}
+            <div class="form-errors">
+                {% for error in form.non_field_errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+            </div>
+            {% endif %}
+
+            {% for field in form %}
+            <div class="form-group">
+                <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                {{ field }}
+                {% if field.help_text %}<small class="text-muted">{{ field.help_text }}</small>{% endif %}
+                {% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+            </div>
+            {% endfor %}
+
+            <button type="submit" class="btn btn-primary btn-full btn-lg">Reset Administrator Login</button>
+        </form>
+
+        <div class="auth-footer">
+            <p><a href="{% url 'accounts:login' %}">← Back to Login</a></p>
+        </div>
+    </div>
+</div>
+{% endblock %}

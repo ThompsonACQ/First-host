@@ -1,0 +1,161 @@
+"""
+School Settings views — home page, settings CRUD, and live branding API.
+"""
+
+import json
+import logging
+
+from django import forms
+from django.contrib import messages
+from django.http import JsonResponse
+from django.shortcuts import render, redirect
+from django.views.decorators.http import require_POST
+
+from .models import SchoolSettings
+from .branding import extract_colors_from_logo
+from accounts.decorators import admin_required
+
+logger = logging.getLogger(__name__)
+
+
+# -----------------------------------------------------------------------
+# School Settings form
+# -----------------------------------------------------------------------
+
+class SchoolSettingsForm(forms.ModelForm):
+    class Meta:
+        model = SchoolSettings
+        fields = [
+            'school_name', 'motto', 'description', 'about',
+            'address', 'phone', 'email', 'website',
+            'logo', 'favicon',
+            'primary_color', 'secondary_color', 'accent_color',
+        ]
+        widgets = {
+            'description': forms.Textarea(attrs={'rows': 3}),
+            'about': forms.Textarea(attrs={'rows': 4}),
+            'primary_color': forms.TextInput(attrs={'type': 'color', 'class': 'color-picker'}),
+            'secondary_color': forms.TextInput(attrs={'type': 'color', 'class': 'color-picker'}),
+            'accent_color': forms.TextInput(attrs={'type': 'color', 'class': 'color-picker'}),
+        }
+
+    def clean_logo(self):
+        logo = self.cleaned_data.get('logo')
+        if logo and hasattr(logo, 'content_type'):
+            allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml']
+            if logo.content_type not in allowed:
+                raise forms.ValidationError(
+                    'Invalid image type. Please upload JPG, PNG, GIF, WebP, or SVG.'
+                )
+            if logo.size > 5 * 1024 * 1024:  # 5 MB
+                raise forms.ValidationError('Logo file too large. Maximum size is 5 MB.')
+        return logo
+
+    def clean_favicon(self):
+        favicon = self.cleaned_data.get('favicon')
+        if favicon and hasattr(favicon, 'content_type'):
+            if favicon.size > 1 * 1024 * 1024:
+                raise forms.ValidationError('Favicon too large. Maximum size is 1 MB.')
+        return favicon
+
+
+# -----------------------------------------------------------------------
+# Home page
+# -----------------------------------------------------------------------
+
+def home(request):
+    """
+    Public home page — all content comes from SchoolSettings in the DB.
+    """
+    from buses.models import Bus
+    buses = Bus.objects.filter(active=True).select_related('route', 'driver')
+    return render(request, 'home.html', {'buses': buses})
+
+
+# -----------------------------------------------------------------------
+# Admin: Website Settings
+# -----------------------------------------------------------------------
+
+@admin_required
+def settings_view(request):
+    """Display and save the school settings form."""
+    school = SchoolSettings.get_settings()
+
+    if request.method == 'POST':
+        form = SchoolSettingsForm(request.POST, request.FILES, instance=school)
+        if form.is_valid():
+            instance = form.save(commit=False)
+
+            # A new logo always becomes the active source of the brand palette.
+            if 'logo' in request.FILES:
+                logo_file = request.FILES['logo']
+                logo_file.seek(0)
+                colors = extract_colors_from_logo(logo_file)
+                logo_file.seek(0)  # Reset pointer so Django can save the file!
+                if colors:
+                    palette = list(colors)
+                    primary = palette[0]
+                    secondary = palette[1] if len(palette) > 1 else primary
+                    accent = palette[2] if len(palette) > 2 else secondary
+                    instance.auto_palette = palette
+                    instance.auto_primary_color = primary
+                    instance.auto_secondary_color = secondary
+                    instance.auto_accent_color = accent
+                    instance.primary_color = primary
+                    instance.secondary_color = secondary
+                    instance.accent_color = accent
+                else:
+                    logger.warning('Could not extract a color palette from uploaded school logo.')
+                    messages.warning(
+                        request,
+                        'Logo saved, but its colors could not be detected. Set the theme colors manually.',
+                    )
+
+            instance.save()
+            messages.success(request, 'School settings saved successfully.')
+            return redirect('school_settings:settings')
+    else:
+        form = SchoolSettingsForm(instance=school)
+
+    return render(request, 'school_settings/settings.html', {
+        'form': form,
+        'school': school,
+    })
+
+
+@admin_required
+def reset_colors(request):
+    """Reset manually changed colors back to auto-detected values."""
+    school = SchoolSettings.get_settings()
+    if school.auto_primary_color:
+        school.primary_color = school.auto_primary_color
+        school.secondary_color = school.auto_secondary_color
+        school.accent_color = school.auto_accent_color
+        school.save(update_fields=[
+            'primary_color', 'secondary_color', 'accent_color', 'updated_at',
+        ])
+        messages.success(request, 'Colors reset to auto-detected values.')
+    else:
+        messages.info(request, 'No auto-detected colors available. Upload a logo first.')
+    return redirect('school_settings:settings')
+
+
+# -----------------------------------------------------------------------
+# AJAX: Live preview data
+# -----------------------------------------------------------------------
+
+def preview_api(request):
+    """
+    Returns current school settings as JSON for the live preview panel.
+    Called by the settings JS before the admin saves.
+    """
+    school = SchoolSettings.get_settings()
+    logo_url = school.logo.url if school.has_logo else ''
+    return JsonResponse({
+        'school_name': school.school_name,
+        'motto': school.motto,
+        'primary_color': school.effective_primary,
+        'secondary_color': school.effective_secondary,
+        'accent_color': school.effective_accent,
+        'logo_url': logo_url,
+    })

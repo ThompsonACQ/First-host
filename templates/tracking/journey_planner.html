@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block title %}Plan My Shuttle Trip{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css" crossorigin="">
+<style>
+.journey-planner { max-width: 1000px; margin: 2rem auto; }
+.journey-card { background: #fff; border-radius: 18px; padding: 2rem; box-shadow: 0 8px 28px rgba(15, 23, 42, .1); }
+.journey-form { display: flex; gap: 1rem; align-items: end; flex-wrap: wrap; }
+.journey-form label { display: block; font-weight: 700; margin-bottom: .45rem; }
+.journey-form select { min-width: 280px; padding: .8rem; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; }
+.journey-result { margin-top: 1.5rem; display: none; }
+.journey-summary { border-left: 4px solid var(--primary, #1e40af); background: #eff6ff; padding: 1.1rem; border-radius: 8px; }
+.journey-summary h2 { margin: 0 0 .5rem; font-size: 1.2rem; }
+.journey-bus { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-top: 1rem; padding: 1rem; border: 1px solid #dbeafe; border-radius: 10px; }
+.journey-bus p { margin: .25rem 0 0; color: #475569; }
+#journey-map { height: 380px; border-radius: 12px; margin-top: 1.25rem; overflow: hidden; }
+.journey-notice { margin-top: 1rem; padding: .85rem 1rem; border-radius: 8px; display: none; }
+.journey-notice.error { background: #fee2e2; color: #991b1b; }
+.journey-notice.info { background: #ecfdf5; color: #166534; }
+@media (max-width: 600px) { .journey-card { padding: 1.2rem; } .journey-form select { min-width: 100%; width: 100%; } .journey-bus { align-items: flex-start; flex-direction: column; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<main class="container journey-planner">
+    <a href="{% url 'tracking:bus_list' %}" class="btn btn-outline">Back to buses</a>
+    <section class="journey-card">
+        <h1>Plan my shuttle trip</h1>
+        <p>Choose where you want to go. We will use your location to find the closest pickup point and the next available shuttle.</p>
+        <form id="journey-form" class="journey-form">
+            <div>
+                <label for="destination">Where do you want to go?</label>
+                <select id="destination" required>
+                    <option value="">Choose a destination</option>
+                    {% for route in routes %}
+                    <option value="{{ route.pk }}">{{ route.destination }} — {{ route.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button class="btn btn-primary" type="submit">Use my location and plan trip</button>
+        </form>
+        <div id="journey-notice" class="journey-notice" role="status"></div>
+        <div id="journey-result" class="journey-result">
+            <div id="journey-summary" class="journey-summary"></div>
+            <div id="journey-buses"></div>
+            <div id="journey-map" aria-label="Walking route to pickup point"></div>
+        </div>
+    </section>
+</main>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js" crossorigin=""></script>
+<script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet/leaflet-maplibre-gl.js"></script>
+<script src="/static/js/journey_planner.js"></script>
+{% endblock %}

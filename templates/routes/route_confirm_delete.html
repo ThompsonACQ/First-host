@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}Delete Route{% endblock %}
+{% block body_class %}admin-page{% endblock %}
+
+{% block content %}
+<div class="admin-layout">
+    {% include "admin_dashboard/_sidebar.html" %}
+
+    <div class="admin-main">
+        <div class="dashboard-section">
+            <div class="delete-confirmation-box">
+                <div class="warning-icon">⚠️</div>
+                <h2>Delete Route: {{ route.name }}?</h2>
+                <p>Are you sure you want to permanently delete this route?</p>
+                <p class="text-danger"><strong>Warning:</strong> Any buses currently assigned to this route will have their route assignment cleared. This action cannot be undone.</p>
+                
+                <form method="post" class="mt-4">
+                    {% csrf_token %}
+                    <div class="form-actions center">
+                        <a href="{% url 'routes:route_list' %}" class="btn btn-outline">Cancel</a>
+                        <button type="submit" class="btn btn-danger">Yes, Delete Route</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

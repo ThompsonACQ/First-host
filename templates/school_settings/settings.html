@@ -1,0 +1,233 @@
+{% extends 'base.html' %}
+{% block title %}School Settings{% endblock %}
+{% block body_class %}admin-page{% endblock %}
+
+{% block content %}
+<div class="settings-layout">
+    <div class="settings-header">
+        <h1>⚙️ Website Settings</h1>
+        <p>Manage school information and branding colors.</p>
+    </div>
+
+    <div class="settings-grid">
+        <!-- Settings Form -->
+        <div class="settings-form-container">
+            <form method="post" enctype="multipart/form-data" id="settings-form">
+                {% csrf_token %}
+
+                <!-- School Info Section -->
+                <div class="settings-section">
+                    <h2>School Information</h2>
+                    <div class="form-row">
+                        <div class="form-group half">
+                            <label for="{{ form.school_name.id_for_label }}">School Name</label>
+                            {{ form.school_name }}
+                            {{ form.school_name.errors }}
+                        </div>
+                        <div class="form-group half">
+                            <label for="{{ form.motto.id_for_label }}">Motto</label>
+                            {{ form.motto }}
+                            {{ form.motto.errors }}
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="{{ form.description.id_for_label }}">Short Description (SEO / Hero)</label>
+                        {{ form.description }}
+                        {{ form.description.errors }}
+                    </div>
+                    <div class="form-group">
+                        <label for="{{ form.about.id_for_label }}">About (Footer / Details)</label>
+                        {{ form.about }}
+                        {{ form.about.errors }}
+                    </div>
+                </div>
+
+                <!-- Contact Section -->
+                <div class="settings-section">
+                    <h2>Contact Details</h2>
+                    <div class="form-group">
+                        <label for="{{ form.address.id_for_label }}">Address</label>
+                        {{ form.address }}
+                        {{ form.address.errors }}
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group half">
+                            <label for="{{ form.phone.id_for_label }}">Phone</label>
+                            {{ form.phone }}
+                            {{ form.phone.errors }}
+                        </div>
+                        <div class="form-group half">
+                            <label for="{{ form.email.id_for_label }}">Email</label>
+                            {{ form.email }}
+                            {{ form.email.errors }}
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="{{ form.website.id_for_label }}">Website URL</label>
+                        {{ form.website }}
+                        {{ form.website.errors }}
+                    </div>
+                </div>
+
+                <!-- Branding Section -->
+                <div class="settings-section branding-section">
+                    <h2>Brand Identity</h2>
+                    
+                    <div class="form-row">
+                        <div class="form-group half logo-upload">
+                            <label for="{{ form.logo.id_for_label }}">School Logo</label>
+                            {% if school.logo and school.logo.name %}
+                            <div class="current-logo">
+                                <img src="{{ school.logo.url }}" alt="Current logo">
+                            </div>
+                            {% endif %}
+                            {{ form.logo }}
+                            <small>Uploading a new logo will automatically detect new theme colors.</small>
+                            {{ form.logo.errors }}
+                        </div>
+                        <div class="form-group half">
+                            <label for="{{ form.favicon.id_for_label }}">Favicon</label>
+                            {% if school.favicon %}
+                            <img src="{{ school.favicon.url }}" alt="Favicon" width="32" class="current-favicon">
+                            {% endif %}
+                            {{ form.favicon }}
+                            {{ form.favicon.errors }}
+                        </div>
+                    </div>
+
+                    <div class="colors-grid">
+                        <div class="form-group color-group">
+                            <label for="{{ form.primary_color.id_for_label }}">Primary Color</label>
+                            {{ form.primary_color }}
+                            {{ form.primary_color.errors }}
+                        </div>
+                        <div class="form-group color-group">
+                            <label for="{{ form.secondary_color.id_for_label }}">Secondary Color</label>
+                            {{ form.secondary_color }}
+                            {{ form.secondary_color.errors }}
+                        </div>
+                        <div class="form-group color-group">
+                            <label for="{{ form.accent_color.id_for_label }}">Accent Color</label>
+                            {{ form.accent_color }}
+                            {{ form.accent_color.errors }}
+                        </div>
+                    </div>
+                    
+                    {% if school.auto_primary_color %}
+                    <div class="auto-colors-notice">
+                        <p>Colors sampled directly from your logo:</p>
+                        <div class="color-swatches">
+                            {% for color in school.auto_palette %}
+                            <div class="swatch" style="background: {{ color }}" title="{{ color }}"></div>
+                            {% endfor %}
+                        </div>
+                        <a href="{% url 'school_settings:reset_colors' %}" class="btn btn-outline btn-sm">Reset to Auto Colors</a>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="form-actions sticky-actions">
+                    <button type="submit" class="btn btn-primary btn-lg">Save Settings</button>
+                    <a href="/admin-dashboard/dashboard/" class="btn btn-outline btn-lg">Cancel</a>
+                </div>
+            </form>
+        </div>
+
+        <!-- Live Preview Panel -->
+        <div class="preview-panel">
+            <div class="preview-header">
+                <h3>Live Preview</h3>
+                <p>See how your changes will look before saving.</p>
+            </div>
+            
+            <div class="preview-window" id="preview-window">
+                <!-- Mock Navbar -->
+                <div class="preview-nav">
+                    <div class="preview-brand">
+                        {% if school.logo and school.logo.name %}
+                            <img src="{{ school.logo.url }}" alt="Logo" id="preview-logo">
+                            <span id="preview-school-name">{{ school.school_name }}</span>
+                        {% else %}
+                            <img src="" alt="Logo" id="preview-logo" style="display:none;">
+                            <span id="preview-school-name" style="display:none;">{{ school.school_name }}</span>
+                            <span id="preview-placeholder">🚌 {{ school.school_name }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Mock Hero -->
+                <div class="preview-hero">
+                    <h2 id="preview-title">{{ school.school_name }}</h2>
+                    <p id="preview-motto">{{ school.motto }}</p>
+                    <button class="preview-btn">Track Shuttle</button>
+                </div>
+
+                <!-- Mock Cards -->
+                <div class="preview-cards">
+                    <div class="preview-card">
+                        <div class="preview-card-header">Bus 101</div>
+                        <div class="preview-badge">Moving</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // Live Preview Logic
+    document.addEventListener('DOMContentLoaded', () => {
+        const root = document.getElementById('preview-window');
+        const inputs = {
+            primary: document.getElementById('{{ form.primary_color.id_for_label }}'),
+            secondary: document.getElementById('{{ form.secondary_color.id_for_label }}'),
+            accent: document.getElementById('{{ form.accent_color.id_for_label }}'),
+            schoolName: document.getElementById('{{ form.school_name.id_for_label }}'),
+            motto: document.getElementById('{{ form.motto.id_for_label }}')
+        };
+
+        const elements = {
+            title: document.getElementById('preview-title'),
+            motto: document.getElementById('preview-motto'),
+            schoolName: document.getElementById('preview-school-name'),
+            placeholder: document.getElementById('preview-placeholder')
+        };
+
+        function updatePreview() {
+            // Update Colors
+            root.style.setProperty('--primary', inputs.primary.value);
+            root.style.setProperty('--secondary', inputs.secondary.value);
+            root.style.setProperty('--accent', inputs.accent.value);
+            
+            // Generate simple RGB for primary to use in alpha transparency
+            const hex = inputs.primary.value.replace('#', '');
+            if(hex.length === 6) {
+                const r = parseInt(hex.substring(0, 2), 16);
+                const g = parseInt(hex.substring(2, 4), 16);
+                const b = parseInt(hex.substring(4, 6), 16);
+                root.style.setProperty('--primary-rgb', `${r}, ${g}, ${b}`);
+            }
+
+            // Update Text
+            elements.title.textContent = inputs.schoolName.value || 'School Name';
+            elements.schoolName.textContent = inputs.schoolName.value;
+            if(elements.placeholder) {
+                elements.placeholder.textContent = '🚌 ' + (inputs.schoolName.value || 'School Name');
+            }
+            elements.motto.textContent = inputs.motto.value;
+        }
+
+        // Attach listeners
+        Object.values(inputs).forEach(input => {
+            if(input) {
+                input.addEventListener('input', updatePreview);
+            }
+        });
+
+        // Initialize preview
+        updatePreview();
+    });
+</script>
+{% endblock %}

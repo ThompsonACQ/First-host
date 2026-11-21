@@ -1,0 +1,254 @@
+{% extends 'base.html' %}
+{% block title %}Admin Dashboard{% endblock %}
+{% block body_class %}admin-page{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css">
+<style>
+.emergency-panel { margin: 1.5rem 0; border: 2px solid #dc2626; border-radius: 12px; overflow: hidden; background: #fff7f7; }
+.emergency-panel h2 { margin: 0; padding: 1rem 1.25rem; color: #fff; background: #b91c1c; }
+.emergency-list { padding: 1rem 1.25rem; color: #7f1d1d; }
+#emergency-map { height: 300px; margin: 0 1.25rem 1.25rem; border-radius: 8px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-layout">
+
+    <!-- Sidebar -->
+    {% include "admin_dashboard/_sidebar.html" %}
+
+    <!-- Main content -->
+    <div class="admin-main">
+
+        <!-- Top bar -->
+        <div class="admin-topbar">
+            <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+            <h1 class="admin-page-title">Dashboard</h1>
+            <div class="admin-user">
+                <span>👤 {{ user.get_full_name|default:user.username }}</span>
+            </div>
+        </div>
+
+        <!-- School logo notice -->
+        {% if not school.has_logo %}
+        <div class="admin-notice">
+            <span class="notice-icon">⚠️</span>
+            <div>
+                <strong>School logo has not been added yet.</strong>
+                Upload your school logo to personalize the website.
+            </div>
+            <a href="/settings/" class="btn btn-primary btn-sm">Upload Logo</a>
+        </div>
+        {% endif %}
+
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+            <div class="stat-card primary">
+                <div class="stat-icon">🚌</div>
+                <div class="stat-number">{{ total_buses }}</div>
+                <div class="stat-label">Total Buses</div>
+            </div>
+            <div class="stat-card success">
+                <div class="stat-icon">🟢</div>
+                <div class="stat-number">{{ active_buses }}</div>
+                <div class="stat-label">Active Buses</div>
+            </div>
+            <div class="stat-card danger">
+                <div class="stat-icon">⚫</div>
+                <div class="stat-number">{{ offline_buses }}</div>
+                <div class="stat-label">Offline Buses</div>
+            </div>
+            <div class="stat-card info">
+                <div class="stat-icon">👤</div>
+                <div class="stat-number">{{ total_drivers }}</div>
+                <div class="stat-label">Drivers</div>
+            </div>
+            <div class="stat-card secondary">
+                <div class="stat-icon">🎓</div>
+                <div class="stat-number">{{ total_students }}</div>
+                <div class="stat-label">Students</div>
+            </div>
+            <div class="stat-card accent">
+                <div class="stat-icon">🗺️</div>
+                <div class="stat-number">{{ active_routes }}</div>
+                <div class="stat-label">Active Routes</div>
+            </div>
+        </div>
+
+        <section id="emergency-panel" class="emergency-panel" {% if not active_emergencies %}style="display:none"{% endif %}>
+            <h2>🚨 Active driver emergencies</h2>
+            <div id="emergency-list" class="emergency-list">
+                {% for alert in active_emergencies %}
+                <div id="emergency-{{ alert.pk }}"><strong>🚨 {{ alert.get_emergency_type_display }} — Bus {{ alert.bus.bus_number }}</strong>: {{ alert.driver.get_full_name|default:alert.driver.username }} · {{ alert.route_name }} · {{ alert.created_at|date:"M j, H:i" }}
+                    {% if alert.driver.phone %}<a class="btn btn-sm btn-danger" href="tel:{{ alert.driver.phone }}">Call driver: {{ alert.driver.phone }}</a>{% else %}<span class="text-muted">No driver phone number saved</span>{% endif %}
+                    <form method="post" action="{% url 'acknowledge_emergency' alert.pk %}" style="margin-top:.6rem; display:flex; gap:.5rem; flex-wrap:wrap">{% csrf_token %}
+                        <input id="admin-ack-{{ alert.pk }}" name="message" aria-label="Acknowledgement message to driver" value="We have received your emergency alert. Help is on the way." style="flex:1; min-width:260px; padding:.45rem">
+                        <button class="btn btn-sm btn-outline" type="submit">Acknowledge &amp; notify driver</button>
+                    </form>
+                    <div style="display:flex; gap:.5rem; margin-top:.5rem"><input id="admin-message-{{ alert.pk }}" placeholder="Send a follow-up message to driver" style="flex:1; padding:.45rem"><button class="btn btn-sm btn-primary" type="button" onclick="sendAdminMessage({{ alert.pk }})">Send message</button></div>
+                </div>
+                {% endfor %}
+            </div>
+            <div id="emergency-map" aria-label="Emergency bus locations"></div>
+        </section>
+
+        <section class="dashboard-section">
+            <div class="section-header-inline"><h2 class="section-subtitle">Driver safety performance</h2></div>
+            {% if driver_performance %}
+            <div class="table-wrapper"><table class="data-table">
+                <thead><tr><th>Driver</th><th>Safety score</th><th>Route adherence</th><th>Speed compliance</th><th>Trips completed</th><th>Average driving time</th></tr></thead>
+                <tbody>{% for item in driver_performance %}<tr>
+                    <td><strong>{{ item.name }}</strong></td><td>{{ item.safety_score }}%</td><td>{{ item.route_adherence }}%</td><td>{{ item.speed_compliance }}%</td><td>{{ item.completed_trips }}</td><td>{{ item.average_driving_time }}</td>
+                </tr>{% endfor %}</tbody>
+            </table></div>
+            {% else %}<div class="empty-state-sm"><p>Safety scores appear after drivers complete GPS-tracked trips.</p></div>{% endif %}
+        </section>
+
+        <!-- Quick Actions -->
+        <div class="quick-actions">
+            <h2 class="section-subtitle">Quick Actions</h2>
+            <div class="action-grid">
+                <a href="/admin-dashboard/buses/create/" class="action-card">
+                    <span class="action-icon">➕</span>
+                    <span>Add Bus</span>
+                </a>
+                <a href="/admin-dashboard/routes/create/" class="action-card">
+                    <span class="action-icon">🗺️</span>
+                    <span>Add Route</span>
+                </a>
+                <a href="/accounts/users/create/" class="action-card">
+                    <span class="action-icon">👤</span>
+                    <span>Add User</span>
+                </a>
+                <a href="/settings/" class="action-card">
+                    <span class="action-icon">⚙️</span>
+                    <span>School Settings</span>
+                </a>
+                <a href="/tracking/" class="action-card">
+                    <span class="action-icon">📍</span>
+                    <span>Live Tracking</span>
+                </a>
+                <a href="/django-admin/" class="action-card" target="_blank">
+                    <span class="action-icon">🔧</span>
+                    <span>Django Admin</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Bus Status Table -->
+        <div class="dashboard-section">
+            <div class="section-header-inline">
+                <h2 class="section-subtitle">Bus Status Overview</h2>
+                <a href="/admin-dashboard/buses/" class="btn btn-outline btn-sm">View All</a>
+            </div>
+
+            {% if recent_buses %}
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Bus No.</th>
+                            <th>Driver</th>
+                            <th>Route</th>
+                            <th>Status</th>
+                            <th>Last known location</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for bus in recent_buses %}
+                        <tr>
+                            <td><strong>{{ bus.bus_number }}</strong></td>
+                            <td>{{ bus.driver_name }}</td>
+                            <td>{{ bus.route_name }}</td>
+                            <td>
+                                <span class="status-badge status-{{ bus.status }}">
+                                    {% if bus.status == 'moving' %}🟢 Moving
+                                    {% elif bus.status == 'stopped' %}🟡 Stopped
+                                    {% else %}⚫ Offline{% endif %}
+                                </span>
+                            </td>
+                            <td>{% if bus.latest_location %}{{ bus.latest_location.timestamp|timesince }} ago{% else %}No location received{% endif %}</td>
+                            <td class="action-cell">
+                                <a href="/tracking/{{ bus.pk }}/" class="btn btn-sm btn-outline" title="Track">📍</a>
+                                <a href="/admin-dashboard/buses/{{ bus.pk }}/edit/" class="btn btn-sm btn-primary" title="Edit">✏️</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state-sm">
+                <p>No buses found. <a href="/admin-dashboard/buses/create/">Add your first bus →</a></p>
+            </div>
+            {% endif %}
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet/leaflet-maplibre-gl.js"></script>
+<script>
+function toggleSidebar() {
+    document.getElementById('admin-sidebar').classList.toggle('sidebar-collapsed');
+}
+
+let emergencyMap;
+let emergencyMarkers = [];
+function showEmergencyOnMap(alert) {
+    const panel = document.getElementById('emergency-panel');
+    panel.style.display = 'block';
+    if (alert.latitude === null || alert.longitude === null || alert.latitude === undefined) return;
+    if (!emergencyMap) {
+        emergencyMap = L.map('emergency-map').setView([alert.latitude, alert.longitude], 15);
+        // Vector tiles retain road and place labels at close zoom levels.
+        L.maplibreGL({
+            style: 'https://tiles.openfreemap.org/styles/liberty',
+            attribution: '&copy; <a href="https://openfreemap.org/">OpenFreeMap</a> &copy; OpenMapTiles &copy; OpenStreetMap contributors',
+        }).addTo(emergencyMap);
+    }
+    const raisedAt = alert.created_at ? new Date(alert.created_at).toLocaleString() : 'Just now';
+    const marker = L.circleMarker([alert.latitude, alert.longitude], {
+        radius: 13, color: '#7f1d1d', weight: 3, fillColor: '#ef4444', fillOpacity: .95,
+    }).addTo(emergencyMap)
+        .bindPopup(`<strong>🚨 ${alert.emergency_type || 'Active SOS'} — Bus ${alert.bus_number}</strong><br><b>Driver:</b> ${alert.driver_name}<br><b>Route:</b> ${alert.route_name}<br><b>GPS:</b> ${Number(alert.latitude).toFixed(6)}, ${Number(alert.longitude).toFixed(6)}<br><b>Raised:</b> ${raisedAt}<br><b>Status:</b> Active`).openPopup();
+    emergencyMarkers.push(marker);
+    emergencyMap.setView([alert.latitude, alert.longitude], 15);
+    setTimeout(() => emergencyMap.invalidateSize(), 100);
+}
+{% for alert in active_emergencies %}
+showEmergencyOnMap({ bus_number: '{{ alert.bus.bus_number|escapejs }}', driver_name: '{{ alert.driver.get_full_name|default:alert.driver.username|escapejs }}', route_name: '{{ alert.route_name|escapejs }}', emergency_type: '{{ alert.get_emergency_type_display|escapejs }}', latitude: {{ alert.latitude|default:'null' }}, longitude: {{ alert.longitude|default:'null' }}, created_at: '{{ alert.created_at|date:"c" }}' });
+{% endfor %}
+
+const adminAlertsSocket = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/admin-alerts/');
+function csrfToken(){return decodeURIComponent(document.cookie.split('; ').find(row=>row.startsWith('csrftoken='))?.split('=')[1]||'');}
+function liveAlertControls(id){return `<div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.6rem"><input id="admin-ack-${id}" value="We have received your emergency alert. Help is on the way." style="flex:1;min-width:260px;padding:.45rem"><button class="btn btn-sm btn-outline" onclick="acknowledgeLiveAlert(${id})">Acknowledge & notify driver</button></div><div style="display:flex;gap:.5rem;margin-top:.5rem"><input id="admin-message-${id}" placeholder="Send a follow-up message to driver" style="flex:1;padding:.45rem"><button class="btn btn-sm btn-primary" onclick="sendAdminMessage(${id})">Send message</button></div>`;}
+async function acknowledgeLiveAlert(id){const message=document.getElementById(`admin-ack-${id}`).value;const response=await fetch(`/admin-dashboard/emergencies/${id}/acknowledge/`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','X-CSRFToken':csrfToken()},body:new URLSearchParams({message})});if(response.ok){document.getElementById(`emergency-controls-${id}`).innerHTML='<strong>✓ Acknowledged — driver notified.</strong>';}}
+async function sendAdminMessage(id){const input=document.getElementById(`admin-message-${id}`),message=input.value.trim();if(!message)return;const response=await fetch(`/admin-dashboard/emergencies/${id}/message/`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','X-CSRFToken':csrfToken()},body:new URLSearchParams({message})});if(response.ok){input.value='';}}
+adminAlertsSocket.onmessage = event => {
+    const alert = JSON.parse(event.data);
+    if (alert.type === 'emergency_message') {
+        const alertRow = document.getElementById(`emergency-${alert.alert_id}`);
+        if (alertRow && alert.sender_role === 'driver') {
+            const line = document.createElement('div');
+            line.style.marginTop = '.5rem';
+            line.style.fontWeight = '700';
+            line.textContent = `Driver message: ${alert.body}`;
+            alertRow.appendChild(line);
+        }
+        return;
+    }
+    if (alert.type !== 'emergency_alert') return;
+    const list = document.getElementById('emergency-list');
+    list.insertAdjacentHTML('afterbegin', `<div id="emergency-${alert.alert_id}"><strong>🚨 ${alert.emergency_type || 'SOS'} — Bus ${alert.bus_number}</strong>: ${alert.driver_name} · ${alert.route_name} · just now <div id="emergency-controls-${alert.alert_id}">${liveAlertControls(alert.alert_id)}</div></div>`);
+    showEmergencyOnMap(alert);
+};
+</script>
+{% endblock %}

@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+{% block title %}Manage Buses{% endblock %}
+{% block body_class %}admin-page{% endblock %}
+
+{% block content %}
+<div class="admin-layout">
+    {% include "admin_dashboard/_sidebar.html" %}
+
+    <div class="admin-main">
+        <div class="admin-topbar">
+            <h1 class="admin-page-title">Manage Buses</h1>
+            <a href="{% url 'buses:bus_create' %}" class="btn btn-primary">➕ Add Bus</a>
+        </div>
+
+        <div class="dashboard-section">
+            {% if buses %}
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Bus No.</th>
+                            <th>Reg. Number</th>
+                            <th>Driver</th>
+                            <th>Route</th>
+                            <th>Status</th>
+                            <th>Active</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for bus in buses %}
+                        <tr class="{% if not bus.active %}row-inactive{% endif %}">
+                            <td><strong>{{ bus.bus_number }}</strong></td>
+                            <td>{{ bus.registration_number }}</td>
+                            <td>{{ bus.driver_name }}</td>
+                            <td>{{ bus.route_name }}</td>
+                            <td>
+                                <span class="status-badge status-{{ bus.status }}">
+                                    {{ bus.get_status_display }}
+                                </span>
+                            </td>
+                            <td>
+                                <form method="post" action="{% url 'buses:bus_toggle_active' bus.pk %}" class="inline-form">
+                                    {% csrf_token %}
+                                    {% if bus.active %}
+                                    <button type="submit" class="btn btn-sm btn-success">Yes</button>
+                                    {% else %}
+                                    <button type="submit" class="btn btn-sm btn-outline">No</button>
+                                    {% endif %}
+                                </form>
+                            </td>
+                            <td class="action-cell">
+                                <a href="{% url 'tracking:live_tracking' bus.pk %}" class="btn btn-sm btn-outline" title="Track">📍</a>
+                                <a href="{% url 'buses:bus_edit' bus.pk %}" class="btn btn-sm btn-primary" title="Edit">✏️</a>
+                                <a href="{% url 'buses:bus_delete' bus.pk %}" class="btn btn-sm btn-danger" title="Delete">🗑️</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-icon">🚌</div>
+                <h3>No buses found</h3>
+                <p>Get started by adding your first shuttle bus to the system.</p>
+                <a href="{% url 'buses:bus_create' %}" class="btn btn-primary mt-3">Add Bus</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

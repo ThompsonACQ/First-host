@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+{% block title %}Student Dashboard{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" integrity="sha512-..." crossorigin="anonymous" referrerpolicy="no-referrer" />
+<style>
+  .dashboard-header {
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    color: #fff;
+    padding: 2rem 1rem;
+    text-align: center;
+    border-radius: 0 0 12px 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  }
+  .dashboard-card {
+    background: rgba(255,255,255,0.95);
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .dashboard-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+  }
+  .card-title {
+    font-size: 1.25rem;
+    margin-bottom: 0.5rem;
+    color: var(--primary);
+  }
+  .card-content {
+    color: #333;
+  }
+  .bus-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .bus-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  .bus-item:last-child {border-bottom: none;}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+  <h1>Welcome, {{ user.get_full_name|default:user.username }}!</h1>
+  <p>Here you can view live shuttle information and your profile.</p>
+</div>
+<div class="container" style="max-width: 960px; margin: 2rem auto;">
+  <div class="dashboard-card">
+    <div class="card-title"><i class="fa-solid fa-bus"></i> Active Buses</div>
+    <div class="card-content">
+      {% if buses %}
+        <ul class="bus-list">
+          {% for bus in buses %}
+            <li class="bus-item">
+              <span>Bus {{ bus.bus_number }}</span>
+              <span class="status-badge-large status-{{ bus.status }}">{{ bus.status|title }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p>No active buses at the moment.</p>
+      {% endif %}
+    </div>
+  </div>
+  <div class="dashboard-card">
+    <div class="card-title"><i class="fa-solid fa-user"></i> My Profile</div>
+    <div class="card-content">
+      <p><strong>Email:</strong> {{ user.email }}</p>
+      <p><strong>Phone:</strong> {{ user.phone|default:'—' }}</p>
+      {% if user.profile_picture %}
+        <img src="{{ user.profile_picture.url }}" alt="Profile picture" style="width:120px;height:120px;border-radius:50%;object-fit:cover;" />
+      {% else %}
+        <p>No profile picture set.</p>
+      {% endif %}
+      <a href="{% url 'accounts:student_profile' %}" class="btn btn-primary" style="margin-top:1rem;">Edit Profile</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

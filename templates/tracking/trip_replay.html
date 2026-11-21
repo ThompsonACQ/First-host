@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Trip Replay{% endblock %}
+{% block body_class %}admin-page{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css">
+<style>#replay-map{height:520px;border-radius:12px}.replay-controls{display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;margin:1rem 0}.replay-controls input{flex:1;min-width:220px}.event-list{margin:1rem 0;padding:0;list-style:none}.event-list li{padding:.55rem .75rem;border-left:4px solid #2563eb;background:#f8fafc;margin:.4rem 0}</style>
+{% endblock %}
+{% block content %}
+<div class="admin-layout">{% include "admin_dashboard/_sidebar.html" %}<div class="admin-main">
+    <div class="admin-topbar"><button class="sidebar-toggle" onclick="toggleSidebar()">☰</button><h1 class="admin-page-title">Trip Replay — Shuttle {{ trip.bus.bus_number }}</h1></div>
+    <a class="btn btn-outline" href="{% url 'trip_history' %}">Back to trip history</a>
+    <section class="dashboard-section"><h2 class="section-subtitle">{{ trip.started_at|date:"M j, Y · H:i" }} · {{ trip.driver.get_full_name|default:trip.driver.username }} · {{ trip.route.name|default:"No route" }}</h2>
+        {% if points %}<div id="replay-map"></div><div class="replay-controls"><button class="btn btn-primary" id="play">Play replay</button><input id="timeline" type="range" min="0" max="{{ points|length|add:'-1' }}" value="0"><strong id="replay-time"></strong></div>
+        <h3>Trip events</h3><ul class="event-list">{% for event in events %}<li><strong>{{ event.kind }}</strong> — {{ event.time|slice:":16" }}{% if event.end_time %} to {{ event.end_time|slice:":16" }}{% endif %}</li>{% endfor %}</ul>
+        {% else %}<p>No GPS points were saved for this trip.</p>{% endif %}
+    </section>
+</div></div>
+{{ points|json_script:"replay-points" }}{{ route_points|json_script:"replay-route" }}
+{% endblock %}
+{% block extra_scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script><script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet/leaflet-maplibre-gl.js"></script>
+<script>
+function toggleSidebar(){document.getElementById('admin-sidebar').classList.toggle('sidebar-collapsed');}
+const points=JSON.parse(document.getElementById('replay-points').textContent), route=JSON.parse(document.getElementById('replay-route').textContent);
+if(points.length){const map=L.map('replay-map').setView([points[0].lat,points[0].lng],14);L.maplibreGL({style:'https://tiles.openfreemap.org/styles/liberty'}).addTo(map);if(route.length>1)L.polyline(route.map(p=>[p.lat,p.lng]),{color:'#d4a72c',weight:5}).addTo(map);const trail=L.polyline(points.map(p=>[p.lat,p.lng]),{color:'#2563eb',weight:4}).addTo(map);const diversions=points.filter(p=>p.off_route);if(diversions.length)L.polyline(diversions.map(p=>[p.lat,p.lng]),{color:'#dc2626',weight:5,dashArray:'8 8'}).addTo(map);const marker=L.circleMarker([points[0].lat,points[0].lng],{radius:10,color:'#fff',weight:3,fillColor:'#2563eb',fillOpacity:1}).addTo(map);L.marker([points[0].lat,points[0].lng]).addTo(map).bindPopup('Trip start');L.marker([points.at(-1).lat,points.at(-1).lng]).addTo(map).bindPopup('Arrival / trip end');map.fitBounds(trail.getBounds(),{padding:[35,35]});const slider=document.getElementById('timeline'),time=document.getElementById('replay-time');function show(i){const p=points[i];marker.setLatLng([p.lat,p.lng]);time.textContent=new Date(p.time).toLocaleString();slider.value=i;}show(0);let timer;document.getElementById('play').onclick=()=>{clearInterval(timer);let i=Number(slider.value);timer=setInterval(()=>{show(i++);if(i>=points.length)clearInterval(timer)},700)};slider.oninput=()=>show(Number(slider.value));}
+</script>{% endblock %}

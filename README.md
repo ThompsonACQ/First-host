@@ -1,0 +1,162 @@
+# School Shuttle Bus Tracking System
+
+A complete, production-ready real-time school shuttle bus tracking web application built with Django and Django Channels.
+
+## Features
+
+- **Real-time Tracking**: Live map tracking using WebSocket technology (Django Channels) and Leaflet.js.
+- **Driver Dashboard**: Allows drivers to broadcast their GPS location directly from their mobile browser using the Geolocation API. No dedicated app required.
+- **Admin Dashboard**: Comprehensive management interface for Buses, Routes, Stops, Users, and School Settings.
+- **Dynamic Branding**: The entire UI updates automatically when the admin changes colors or uploads a new logo in the settings page. Colors are automatically extracted from the logo.
+- **Role-based Access Control**: 
+  - Admin: Full system access.
+  - Driver: Access to their specific dashboard to broadcast location.
+  - Student/Public: View-only access to track buses.
+- **Responsive Design**: Beautiful, modern, Glassmorphism-inspired UI that works perfectly on desktops, tablets, and phones.
+
+## Tech Stack
+
+- **Backend**: Python 3, Django 4.2+, Django REST Framework, Django Channels (WebSockets)
+- **Frontend**: HTML5, Vanilla CSS3 (with CSS variables), Vanilla JavaScript, Leaflet.js (for Maps)
+- **Database**: SQLite (default for development), PostgreSQL (recommended for production)
+
+## Setup Instructions
+
+1. **Clone the repository** (or download the source):
+   ```bash
+   git clone <repo-url>
+   cd shuttle-track
+   ```
+
+2. **Set up a virtual environment**:
+   ```bash
+   python -m venv venv
+   # Windows:
+   .\venv\Scripts\activate
+   # Mac/Linux:
+   source venv/bin/activate
+   ```
+
+3. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Apply database migrations**:
+   ```bash
+   python manage.py migrate
+   ```
+   Use `makemigrations` only when you have changed a model.
+
+5. **Create a superuser (Admin)**:
+   ```bash
+   python manage.py createsuperuser
+   ```
+
+6. **Run the development server**:
+   ```bash
+   python manage.py runserver
+   ```
+   The local server uses the in-memory channel layer. To exercise production-style
+   cross-process WebSocket broadcasts locally, set `REDIS_URL` to a reachable Redis
+   service first.
+
+7. **Access the Application**:
+   - Website: `http://127.0.0.1:8000/`
+   - Login: `http://127.0.0.1:8000/accounts/login/`
+
+## Local environment
+
+Copy `.env.example` to `.env`, generate a local key, and leave `DATABASE_URL` and
+`REDIS_URL` unset to use the existing SQLite database and in-memory channel layer:
+
+```bash
+python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+```
+
+Paste the generated value into `.env`. `.env` is ignored by Git; do not commit it.
+`SECRET_KEY`, `DATABASE_URL`, and `REDIS_URL` are read from the environment (or
+local `.env`). When `DEBUG=False`, startup fails unless a secret key, PostgreSQL
+`DATABASE_URL`, Redis `REDIS_URL`, and a production host/origin are configured.
+
+## Render deployment
+
+The included `render.yaml` configures a Python web service. Its build command is:
+
+```bash
+pip install -r requirements.txt && python manage.py collectstatic --noinput
+```
+
+Its start command applies migrations before serving HTTP and WebSockets through
+Daphne:
+
+```bash
+python manage.py migrate --noinput && daphne -b 0.0.0.0 -p $PORT config.asgi:application
+```
+
+Create the Render web service from the repository and configure these environment
+variables in its dashboard:
+
+| Variable | Value |
+| --- | --- |
+| `DEBUG` | `False` |
+| `SECRET_KEY` | Generate a unique secret in Render; never reuse the local key |
+| `DATABASE_URL` | Internal connection URL for a Render PostgreSQL database |
+| `REDIS_URL` | Connection URL for a Redis-compatible service; use `rediss://` if TLS is required |
+| `ALLOWED_HOSTS` | Optional comma-separated custom hostnames; Render's assigned hostname is added automatically |
+| `CSRF_TRUSTED_ORIGINS` | Optional comma-separated full `https://` origins for custom domains; Render's hostname is added automatically |
+
+Render provides `PORT` and `RENDER_EXTERNAL_HOSTNAME` for the web service. Add
+your custom domain to both the allowed-host and CSRF origin configuration.
+Create the PostgreSQL database and Redis-compatible service separately, then
+copy their connection URLs into the web service's `DATABASE_URL` and `REDIS_URL`.
+Keep credentials in Render's environment settings rather than in source control.
+
+`collectstatic` runs during the build and WhiteNoise serves compressed,
+manifested static assets (including Django admin assets). Migrations run at
+startup; keep a single web instance during deployment/migration, and review
+model migrations before deploying schema changes.
+
+The app requires Redis in production: an in-memory layer is process-local and
+cannot reliably broadcast updates to users connected to different workers.
+Redis/Key Value availability and pricing depend on the current Render plan. If
+the selected plan does not provide a suitable Redis service, use a reachable
+managed Redis-compatible service or host the ASGI service on a plan/provider
+that supports Redis. Do not remove `REDIS_URL` or use in-memory channels as a
+production multi-worker substitute.
+
+The existing upload fields continue to use Django's `MEDIA_ROOT`/file storage.
+Render web-service disks are ephemeral, so uploaded logos/profile images can be
+lost on redeploy or instance replacement. For durable uploads, configure an
+S3-compatible object store (for example AWS S3 or Cloudflare R2) through a
+Django storage backend such as `django-storages`; this can be added without
+changing the models or upload forms.
+
+Before pushing to GitHub, run locally:
+
+```bash
+python manage.py check
+python manage.py makemigrations --check --dry-run
+python manage.py migrate
+python manage.py collectstatic --noinput
+python manage.py test
+```
+
+These commands use your local SQLite database. Production checks require the
+production environment variables to be present; do not put production secrets
+in `.env.example` or commit `.env`.
+
+## Using the System
+
+1. **Setup School Info**: Log in as admin, go to Admin -> School Settings. Upload a logo to automatically generate a brand color palette!
+2. **Add Routes**: Go to Admin -> Routes. Create a route, define start/end, and add intermediate stops.
+3. **Add Drivers**: Go to Admin -> Users. Create a user and select the "Driver" role.
+4. **Add Buses**: Go to Admin -> Buses. Create a bus, assign a route, and assign a driver.
+5. **Start Tracking**: 
+   - The driver logs in on their phone and clicks "START SHARING LOCATION".
+   - Students go to the website, click "Track Bus", and watch the bus move on the live map.
+
+## Architecture Highlights
+- **WebSockets**: `tracking/consumers.py` handles bidirectional real-time data using Redis in production (or InMemoryChannelLayer for dev) to broadcast driver coordinates to all connected tracking clients immediately. Student clients retry with exponential backoff; the driver dashboard reconnects with capped exponential backoff and sends its latest buffered GPS fix after reconnection.
+- **Singleton Settings**: The `SchoolSettings` model overrides the `save()` method to ensure only one record exists, providing global branding.
+- **Inline Formsets**: Route stops are dynamically managed using Django's inline formsets, completely styled with custom CSS for a better UX.

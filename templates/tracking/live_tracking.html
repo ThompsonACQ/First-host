@@ -1,0 +1,478 @@
+{% extends 'base.html' %}
+{% block title %}Live Tracking — Bus {{ bus.bus_number }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css"/>
+<style>
+/* Location permission modal */
+#location-permission-modal {
+    display: none;
+    position: fixed;
+    top: 50%; left: 50%; transform: translate(-50%, -50%);
+    z-index: 500;
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px 30px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+    text-align: center;
+    max-width: 360px;
+    width: 90%;
+}
+#location-permission-modal h4 { margin: 0 0 1rem; font-size: 1.2rem; color: #111; }
+#location-permission-modal h4 { margin: 0 0 1rem; font-size: 1.2rem; color: #111; }
+#location-permission-modal p  { color: #6b7280; font-size: 0.9rem; margin-bottom: 1rem; }
+#location-permission-modal button { margin: 0 8px; min-width: 80px; }
+    /* ── Full-height layout ──────────────────────────────────── */
+    .tracking-layout {
+        display: flex;
+        height: calc(100vh - var(--nav-height, 70px));
+        overflow: hidden;
+    }
+
+    /* ── LEFT SIDEBAR ────────────────────────────────────────── */
+    .tracking-panel {
+        width: 340px;
+        min-width: 300px;
+        max-width: 360px;
+        background: #fff;
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+        box-shadow: 2px 0 12px rgba(0,0,0,0.10);
+        z-index: 10;
+        flex-shrink: 0;
+    }
+
+    .panel-header {
+        background: #1a3a7c;
+        color: #fff;
+        padding: 12px 18px 14px;
+    }
+    .panel-back {
+        background: rgba(255,255,255,0.18);
+        border: none;
+        color: #fff;
+        font-size: 0.8rem;
+        border-radius: 6px;
+        padding: 4px 10px;
+        cursor: pointer;
+        margin-bottom: 6px;
+    }
+    .panel-title {
+        font-size: 1.7rem;
+        font-weight: 800;
+        margin: 0;
+        letter-spacing: -0.5px;
+    }
+
+    .status-section { padding: 14px 18px 10px; border-bottom: 1px solid #f0f0f0; }
+    .status-badge-large {
+        display: inline-flex; align-items: center; gap: 7px;
+        font-size: 1rem; font-weight: 700; border-radius: 20px;
+        padding: 6px 16px;
+    }
+    .status-moving  { background: #dcfce7; color: #16a34a; }
+    .status-stopped { background: #fef9c3; color: #b45309; }
+    .status-offline { background: #f3f4f6; color: #374151; }
+
+    .info-list { padding: 0 18px; }
+    .info-item {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 11px 0; border-bottom: 1px solid #f3f4f6; font-size: 0.9rem;
+    }
+    .info-item:last-child { border-bottom: none; }
+    .info-label { color: #6b7280; }
+    .info-value { font-weight: 600; color: #111827; text-align: right; max-width: 60%; }
+    .info-item.highlight .info-value { color: #2563eb; font-size: 1rem; }
+
+    .nearest-stop-highlight { background: #eff6ff; border-radius: 8px; padding: 8px 12px; margin: 0 18px 8px; font-size: 0.82rem; color: #1d4ed8; border: 1px solid #bfdbfe; }
+
+    .stops-section { padding: 12px 18px; border-top: 1px solid #f0f0f0; }
+    .stops-title { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: #9ca3af; margin-bottom: 10px; }
+    .stops-list { list-style: none; padding: 0; margin: 0; }
+    .stop-item { padding: 5px 0 5px 16px; font-size: 0.88rem; position: relative; color: #374151; }
+    .stop-item::before { content: ''; position: absolute; left: 4px; top: 50%; transform: translateY(-50%); width: 7px; height: 7px; border-radius: 50%; background: #d1d5db; border: 2px solid #6b7280; }
+    .stop-start::before { background: #22c55e; border-color: #16a34a; }
+    .stop-end::before   { background: #ef4444; border-color: #dc2626; }
+
+    .ws-connection-status {
+        margin: 10px 18px 14px; padding: 9px 14px; border-radius: 20px;
+        text-align: center; font-size: 0.82rem; font-weight: 600;
+    }
+    .ws-connection-status.connected    { background: #dcfce7; color: #15803d; }
+    .ws-connection-status.disconnected { background: #fee2e2; color: #b91c1c; }
+
+    /* ── RIGHT MAP AREA ──────────────────────────────────────── */
+    .map-container {
+        flex: 1;
+        position: relative;
+        min-height: 400px;
+    }
+    #tracking-map {
+        width: 100%;
+        height: 100%;
+        min-height: 400px;
+        z-index: 1;
+        background: transparent;
+    }
+    #tracking-map.using-campus-fallback,
+    #tracking-map.using-campus-fallback .leaflet-container,
+    #tracking-map.using-campus-fallback .leaflet-map-pane {
+        background: transparent;
+    }
+    #tracking-map.leaflet-container {
+        background: transparent !important;
+    }
+    .campus-map-label {
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        box-shadow: 0 2px 8px rgba(15,23,42,.12);
+        color: #1e293b;
+        font-family: Inter, sans-serif;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 4px 7px;
+        white-space: nowrap;
+    }
+
+    .map-container {
+        background: #eef3f7;
+    }
+
+    /* Offline overlay */
+    .map-overlay {
+        position: absolute; inset: 0; background: rgba(255,255,255,0.85);
+        z-index: 500; display: flex; align-items: center; justify-content: center;
+        backdrop-filter: blur(4px);
+    }
+    .overlay-content {
+        background: #fff; padding: 2.5rem 3rem; border-radius: 16px;
+        text-align: center; box-shadow: 0 8px 30px rgba(0,0,0,0.15); max-width: 380px;
+    }
+    .overlay-icon { font-size: 3rem; margin-bottom: 0.8rem; }
+
+    /* ── MAP INFO PANEL (top-right corner of map) ────────────── */
+    #map-info-panel {
+        position: absolute;
+        top: 12px; right: 12px;
+        z-index: 400;
+        display: flex; flex-direction: column; gap: 8px;
+        max-width: 210px;
+    }
+    .map-info-card {
+        background: rgba(255,255,255,0.97);
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+        padding: 10px 14px;
+        font-size: 0.8rem;
+    }
+    .map-info-card .card-label { color: #6b7280; font-size: 0.72rem; margin-bottom: 2px; }
+    .map-info-card .card-value { font-weight: 700; color: #111827; font-size: 0.92rem; }
+    .map-info-card.bus-card { border-left: 4px solid #2563eb; }
+    .map-info-card.walk-card { border-left: 4px solid #16a34a; }
+
+    /* ── MAP LEGEND ──────────────────────────────────────────── */
+    #map-legend {
+        position: absolute; bottom: 16px; left: 16px;
+        z-index: 400;
+        background: rgba(255,255,255,0.97);
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+        padding: 10px 14px;
+        font-size: 0.78rem;
+    }
+    #map-legend h4 { margin: 0 0 7px; font-size: 0.82rem; font-weight: 700; color: #111; }
+    .legend-item { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; color: #374151; }
+    .legend-dot  { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+    .legend-line { width: 22px; height: 4px; border-radius: 2px; flex-shrink: 0; }
+    .legend-dashed { background: repeating-linear-gradient(90deg,#16a34a 0,#16a34a 6px,transparent 6px,transparent 10px); }
+
+    /* Responsive – stack on small screens */
+    @media (max-width: 760px) {
+        .tracking-layout { flex-direction: column; height: auto; }
+        .tracking-panel  { width: 100%; max-width: 100%; }
+        #tracking-map    { min-height: 55vh; }
+        #map-info-panel  { display: none; }
+    }
+
+    /* ── Off-route warning banner ────────────────────────────────────────── */
+    #off-route-banner {
+        display: none;
+        position: absolute;
+        top: 12px; left: 50%; transform: translateX(-50%);
+        z-index: 450;
+        align-items: center; gap: 10px;
+        background: linear-gradient(135deg, #ea580c, #dc2626);
+        color: #fff;
+        padding: 10px 20px;
+        border-radius: 30px;
+        font-weight: 700;
+        font-size: 0.88rem;
+        box-shadow: 0 4px 20px rgba(220,38,38,0.45);
+        white-space: nowrap;
+        animation: pulseWarning 1.8s ease-in-out infinite;
+        max-width: calc(100% - 40px);
+    }
+    @keyframes pulseWarning {
+        0%, 100% { box-shadow: 0 4px 20px rgba(220,38,38,0.45); }
+        50%       { box-shadow: 0 4px 28px rgba(220,38,38,0.75); }
+    }
+    #off-route-banner .banner-icon { font-size: 1.15rem; animation: shake 0.6s ease-in-out infinite alternate; }
+    @keyframes shake { from { transform: rotate(-8deg); } to { transform: rotate(8deg); } }
+
+    /* Off-route sidebar badge */
+    .off-route-sidebar-badge {
+        display: none;
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        border-radius: 8px;
+        padding: 8px 12px;
+        margin: 0 18px 8px;
+        font-size: 0.82rem;
+        color: #b91c1c;
+        font-weight: 600;
+        align-items: center;
+        gap: 6px;
+    }
+
+/* ── Location modal buttons ──────────────────────────────── */
+#use-current-location-btn {
+    background: #2563eb; color: #fff; border: none;
+    border-radius: 8px; padding: 8px 16px; font-size: 0.9rem;
+    font-weight: 600; cursor: pointer; margin-bottom: 6px;
+}
+#use-current-location-btn:hover { background: #1d4ed8; }
+#pick-on-map-btn {
+    background: #f3f4f6; color: #374151; border: 1px solid #d1d5db;
+    border-radius: 8px; padding: 8px 16px; font-size: 0.9rem;
+    font-weight: 600; cursor: pointer;
+}
+#pick-on-map-btn:hover { background: #e5e7eb; }
+</style>
+{% endblock %}
+
+
+{% block main_class %}no-padding{% endblock %}
+{% block footer %}{% endblock %}
+
+{% block content %}
+<div class="tracking-layout">
+
+    <!-- ══════════════════ LEFT SIDEBAR ══════════════════ -->
+    <aside class="tracking-panel" id="tracking-panel">
+        <div class="panel-header">
+            <button class="panel-back" onclick="history.back()">← Back</button>
+            <h2 class="panel-title">Bus {{ bus.bus_number }}</h2>
+        </div>
+
+        <!-- Status badge -->
+        <div class="status-section">
+            <div id="bus-status-badge" class="status-badge-large status-{{ bus.status }}">
+                {% if bus.status == 'moving' %}🟢 MOVING
+                {% elif bus.status == 'stopped' %}🟡 STOPPED
+                {% else %}⚫ OFFLINE{% endif %}
+            </div>
+        </div>
+
+        <!-- Off-route sidebar badge (shown by JS) -->
+        <div class="off-route-sidebar-badge" id="off-route-sidebar-badge">
+            🚨 Bus is currently off its assigned route
+        </div>
+
+        <!-- Info rows -->
+        <div class="info-list">
+            <div class="info-item">
+                <span class="info-label">Driver</span>
+                <span class="info-value">{{ bus.driver_name }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Route</span>
+                <span class="info-value">{{ bus.route_name }}</span>
+            </div>
+            {% if bus.route %}
+            <div class="info-item">
+                <span class="info-label">Destination</span>
+                <span class="info-value">{{ bus.route.destination }}</span>
+            </div>
+            {% endif %}
+            <div class="info-item" id="seat-availability-status">
+                <span class="info-label">Seats</span>
+                <span class="info-value" id="seat-availability-message">{{ bus.occupied_seats }} / {{ bus.capacity }} occupied · {{ bus.available_seats }} available</span>
+            </div>
+            <div class="info-item highlight">
+                <span class="info-label">⏱ ETA</span>
+                <span class="info-value" id="eta-display">{{ eta }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">🚀 Speed</span>
+                <span class="info-value" id="speed-display">{% if location %}{{ location.speed_display }}{% else %}0.0 km/h{% endif %}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">🕐 Last Update</span>
+                <span class="info-value" id="last-update-display">{% if location %}{{ location.timestamp|timesince }} ago{% else %}No data{% endif %}</span>
+            </div>
+            <!-- Your location -->
+            <div class="info-item" id="student-location-status">
+                <span class="info-label">📍 Your Location</span>
+                <span class="info-value" id="student-location-message">Requesting location…</span>
+            </div>
+            <!-- Nearest Pickup -->
+            <div class="info-item" id="nearest-stop-status">
+                <span class="info-label">🗺 Nearest Pickup Point</span>
+                <span class="info-value" id="nearest-stop-message">Calculating…</span>
+            </div>
+            <!-- Bus distance to pickup -->
+            <div class="info-item" id="bus-distance-status">
+                <span class="info-label">🚌 Distance to Pickup</span>
+                <span class="info-value" id="bus-stop-eta-message">Calculating…</span>
+            </div>
+            <!-- Walking info -->
+            <div class="info-item" id="walking-route-status" style="display:none;">
+                <span class="info-label">🚶 Walk to Pickup</span>
+                <span class="info-value" id="walking-eta-message">Calculating…</span>
+            </div>
+            <!-- Distance to bus -->
+            <div class="info-item" id="distance-to-bus-status" style="display:none;">
+                <span class="info-label">📏 Distance to Bus</span>
+                <span class="info-value" id="distance-to-bus-message">Calculating…</span>
+            </div>
+        </div>
+
+        <!-- Route Stops list -->
+        {% if bus.route and bus.route.stops.all %}
+        <div class="stops-section">
+            <h4 class="stops-title">Route Stops</h4>
+            <ol class="stops-list">
+                {% if bus.route.start_location %}
+                <li class="stop-item stop-start">📍 {{ bus.route.start_location }}</li>
+                {% endif %}
+                {% for stop in bus.route.stops.all %}
+                <li class="stop-item">{{ stop.name }}</li>
+                {% endfor %}
+                <li class="stop-item stop-end">🏁 {{ bus.route.destination }}</li>
+            </ol>
+        </div>
+        {% endif %}
+
+        <!-- WebSocket status -->
+        <div id="ws-connection" class="ws-connection-status disconnected">
+            <span id="ws-conn-text">Connecting…</span>
+        </div>
+    </aside>
+
+    <!-- ══════════════════ RIGHT MAP ══════════════════════ -->
+    <div class="map-container" id="map-container">
+
+        <!-- The actual Leaflet map -->
+        <div id="tracking-map"></div>
+
+        <!-- Top-right floating info cards (shown when we have data) -->
+        <div id="map-info-panel">
+            <div class="map-info-card bus-card" id="map-bus-card" style="display:none;">
+                <div class="card-label">🚌 Bus {{ bus.bus_number }}</div>
+                <div class="card-value" id="map-bus-status">Stopped</div>
+            </div>
+            <div class="map-info-card walk-card" id="map-walk-card" style="display:none;">
+                <div class="card-label">🚶 Walk to Pickup</div>
+                <div class="card-value" id="map-walk-info">—</div>
+                <div style="font-size:0.72rem;color:#6b7280;margin-top:2px;" id="map-walk-time"></div>
+            </div>
+        </div>
+
+        <!-- Bottom-left legend -->
+        <div id="map-legend">
+            <h4>Legend</h4>
+            <div class="legend-item"><span class="legend-dot" style="background:#16A34A;"></span> You (Student Location)</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#1E40AF; border:2px solid #2563EB;"></span> Bus (live location)</div>
+            <div class="legend-item" id="legend-off-route-note" style="display:none;">
+                <span class="legend-dot" style="background:#EA580C; border:2px solid #C2410C;"></span> Bus (off-route!)
+            </div>
+            <div class="legend-item"><span class="legend-dot" style="background:#DC2626;"></span> Pickup Stop</div>
+            <div class="legend-item">
+                <span class="legend-line" style="background:#EAB308;"></span>
+                Walk Route (To Pickup Stop)
+            </div>
+            <div class="legend-item">
+                <span class="legend-line" style="background:#2563EB;"></span>
+                Bus Route ({{ bus.route.start_location|default:"Start" }} — {{ bus.route.destination|default:"End" }})
+            </div>
+        </div>
+
+        <!-- Off-route warning banner (shown by tracking.js when bus is off-route) -->
+        <div id="off-route-banner" role="alert">
+            <span class="banner-icon">🚨</span>
+            <span>Bus is off-route — driver has been notified</span>
+        </div>
+
+        <!-- Offline overlay (only if bus is offline at page load) -->
+        {% if bus.status == 'offline' %}
+        <div class="map-overlay" id="offline-overlay">
+            <div class="overlay-content">
+                <div class="overlay-icon">⚫</div>
+                <h3>Bus is Offline</h3>
+                <p>This bus is not currently sharing its location.</p>
+                <p>The map will update automatically when the driver goes online.</p>
+            </div>
+        </div>
+        {% else %}
+        <!-- Hidden by default; JS shows it if bus goes offline -->
+        <div class="map-overlay" id="offline-overlay" style="display:none;">
+            <div class="overlay-content">
+                <div class="overlay-icon">⚫</div>
+                <h3>Bus is Offline</h3>
+                <p>This bus has gone offline.</p>
+                <p>The map will update automatically when the driver reconnects.</p>
+            </div>
+        </div>
+        {% endif %}
+    </div><!-- /map-container -->
+    <!-- Location Permission Modal -->
+    <div id="location-permission-modal">
+        <h4>Select Your Location</h4>
+        <p>Please choose how to set your location.</p>
+        <button id="use-current-location-btn">Use My Current Location</button>
+        <button id="pick-on-map-btn">Pick a Point on Map</button>
+    </div>
+</div><!-- /tracking-layout -->
+{% endblock %}
+
+{% block extra_scripts %}
+<!-- Leaflet.js must load before tracking.js -->
+<script src="/static/vendor/leaflet/leaflet.js"></script>
+<!-- Tracking JS -->
+<script src="/static/js/tracking.js"></script>
+<script>
+    const TRACKING_CONFIG = {
+        busId:      {{ bus.pk }},
+        wsUrl:      (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host + '/ws/tracking/{{ bus.pk }}/',
+        initialLat: {% if location %}{{ location.latitude }}{% else %}null{% endif %},
+        initialLng: {% if location %}{{ location.longitude }}{% else %}null{% endif %},
+        busStatus:  '{{ bus.status }}',
+        busNumber:  '{{ bus.bus_number }}',
+        stops:      {{ stops_json|safe }},
+        routeStart: {
+            name: '{% if bus.route %}{{ bus.route.start_location|escapejs }}{% endif %}',
+            lat:  {% if bus.route and bus.route.start_latitude %}{{ bus.route.start_latitude }}{% else %}null{% endif %},
+            lng:  {% if bus.route and bus.route.start_longitude %}{{ bus.route.start_longitude }}{% else %}null{% endif %}
+        },
+        routeEnd: {
+            name: '{% if bus.route %}{{ bus.route.destination|escapejs }}{% endif %}',
+            lat:  {% if bus.route and bus.route.destination_latitude %}{{ bus.route.destination_latitude }}{% else %}null{% endif %},
+            lng:  {% if bus.route and bus.route.destination_longitude %}{{ bus.route.destination_longitude }}{% else %}null{% endif %}
+        },
+        primaryColor: '{{ primary_color|default:"#1E40AF" }}'
+    };
+
+    document.addEventListener('DOMContentLoaded', function () {
+        try {
+            initLiveTracking(TRACKING_CONFIG);
+        } catch (e) {
+            console.error('TRACKING JS ERROR:', e);
+            const wc = document.getElementById('ws-connection');
+            const wt = document.getElementById('ws-conn-text');
+            if (wc) wc.className = 'ws-connection-status disconnected';
+            if (wt) wt.innerHTML = '❌ JS Error: ' + e.message;
+        }
+    });
+</script>
+{% endblock %}

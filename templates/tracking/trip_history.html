@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Trip History{% endblock %}
+{% block body_class %}admin-page{% endblock %}
+{% block content %}
+<div class="admin-layout">
+    {% include "admin_dashboard/_sidebar.html" %}
+    <div class="admin-main">
+        <div class="admin-topbar"><button class="sidebar-toggle" onclick="toggleSidebar()">☰</button><h1 class="admin-page-title">Trip History</h1></div>
+        <section class="dashboard-section">
+            <p class="text-muted">Review GPS-recorded trips for complaints, incidents, and operational audits.</p>
+            {% if trips %}
+            <div class="table-wrapper"><table class="data-table">
+                <thead><tr><th>Date / start</th><th>Shuttle</th><th>Driver</th><th>Route</th><th>Arrival</th><th>Safety</th><th></th></tr></thead>
+                <tbody>{% for trip in trips %}<tr>
+                    <td>{{ trip.started_at|date:"M j, Y H:i" }}</td><td><strong>{{ trip.bus.bus_number }}</strong></td>
+                    <td>{{ trip.driver.get_full_name|default:trip.driver.username }}</td><td>{{ trip.route.name|default:"No route" }}</td>
+                    <td>{% if trip.completed %}Completed{% else %}Ended away from destination{% endif %}</td><td>{{ trip.safety_score }}%</td>
+                    <td><a class="btn btn-sm btn-primary" href="{% url 'trip_replay' trip.pk %}">Replay</a></td>
+                </tr>{% endfor %}</tbody>
+            </table></div>
+            {% else %}<div class="empty-state-sm"><p>No completed GPS-tracked trips yet. New trips appear here after the driver stops sharing location.</p></div>{% endif %}
+        </section>
+    </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}<script>function toggleSidebar(){document.getElementById('admin-sidebar').classList.toggle('sidebar-collapsed');}</script>{% endblock %}

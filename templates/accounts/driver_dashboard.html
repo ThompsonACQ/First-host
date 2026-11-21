@@ -1,0 +1,298 @@
+{% extends 'base.html' %}
+{% block title %}Driver Dashboard{% endblock %}
+{% block body_class %}driver-page{% endblock %}
+
+{% block extra_head %}
+<!-- Leaflet CSS for the off-route mini-map -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+    /* ── Off-route modal overlay ─────────────────────────────────────────── */
+    #off-route-modal {
+        display: none;
+        position: fixed; inset: 0;
+        z-index: 9999;
+        background: rgba(0,0,0,0.65);
+        backdrop-filter: blur(4px);
+        align-items: center; justify-content: center;
+        animation: fadeInModal 0.3s ease;
+    }
+    @keyframes fadeInModal { from { opacity: 0; } to { opacity: 1; } }
+
+    .off-route-modal-box {
+        background: #fff;
+        border-radius: 18px;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+        max-width: 520px;
+        width: calc(100% - 32px);
+        overflow: hidden;
+        animation: slideUpModal 0.35s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    @keyframes slideUpModal { from { transform: translateY(40px); opacity:0; } to { transform: translateY(0); opacity:1; } }
+
+    .off-route-header {
+        background: linear-gradient(135deg, #dc2626, #b91c1c);
+        color: #fff;
+        padding: 20px 24px 14px;
+        display: flex; align-items: center; gap: 14px;
+    }
+    .off-route-header-icon {
+        font-size: 2.6rem;
+        animation: pulseIcon 1.2s ease-in-out infinite;
+    }
+    @keyframes pulseIcon { 0%,100% { transform: scale(1); } 50% { transform: scale(1.15); } }
+    .off-route-header-text h2 {
+        margin: 0; font-size: 1.3rem; font-weight: 800;
+    }
+    .off-route-header-text p {
+        margin: 4px 0 0; font-size: 0.85rem; opacity: 0.9;
+    }
+
+    /* Mini-map */
+    #driver-mini-map {
+        width: 100%; height: 240px;
+    }
+
+    .off-route-footer {
+        padding: 14px 20px 18px;
+        background: #fef2f2;
+        border-top: 1px solid #fecaca;
+    }
+    #off-route-nav-info {
+        font-size: 0.88rem; font-weight: 600; color: #1d4ed8;
+        margin-bottom: 10px; min-height: 1.2em;
+    }
+    .off-route-legend {
+        display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.78rem; color: #6b7280; margin-bottom: 12px;
+    }
+    .off-route-legend-item { display: flex; align-items: center; gap: 6px; }
+    .legend-swatch { width: 22px; height: 5px; border-radius: 3px; }
+    .off-route-dismiss-btn {
+        width: 100%;
+        padding: 11px;
+        background: #dc2626;
+        color: #fff;
+        border: none;
+        border-radius: 10px;
+        font-size: 0.92rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+    .off-route-dismiss-btn:hover { background: #b91c1c; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="driver-dashboard">
+    <form style="display:none">{% csrf_token %}</form>
+
+    <!-- Driver Header -->
+    <div class="driver-header">
+        <div class="driver-info">
+            <div class="driver-avatar">{{ driver.get_full_name|first|upper|default:"D" }}</div>
+            <div>
+                <h1 class="driver-name">{{ driver.get_full_name|default:driver.username }}</h1>
+                <p class="driver-role">🚌 Driver</p>
+            </div>
+        </div>
+        <a href="/accounts/logout/" class="btn btn-outline" onclick="if (typeof stopSharing === 'function') stopSharing()">Logout</a>
+    </div>
+
+    {% if not bus %}
+    <!-- No bus assigned -->
+    <div class="driver-no-bus">
+        <div class="no-bus-icon">⚠️</div>
+        <h2>No Bus Assigned</h2>
+        <p>You have not been assigned a bus yet. Please contact your administrator.</p>
+    </div>
+
+    {% else %}
+    <!-- Bus & Route Info -->
+    <div class="driver-grid">
+        <div class="driver-card info-card-primary">
+            <h3>Your Bus</h3>
+            <div class="big-number">Bus {{ bus.bus_number }}</div>
+            <p class="reg-number">{{ bus.registration_number }}</p>
+        </div>
+
+        <div class="driver-card">
+            <h3>Route</h3>
+            {% if bus.route %}
+            <p class="route-name">{{ bus.route.name }}</p>
+            <p class="route-detail">{{ bus.route.start_location }} → {{ bus.route.destination }}</p>
+            {% else %}
+            <p class="text-muted">No route assigned</p>
+            {% endif %}
+        </div>
+
+        <div class="driver-card" id="gps-status-card">
+            <h3>GPS Status</h3>
+            <div id="gps-status" class="status-indicator offline">
+                <span class="status-dot"></span>
+                <span id="gps-status-text">Not sharing</span>
+            </div>
+        </div>
+
+        <div class="driver-card" id="speed-card">
+            <h3>Current Speed</h3>
+            <div class="big-number" id="current-speed">— km/h</div>
+        </div>
+
+        <div class="driver-card">
+            <h3>Passenger count</h3>
+            <div class="big-number"><span id="occupied-seats">{{ bus.occupied_seats }}</span> / {{ bus.capacity }}</div>
+            <p class="text-muted"><span id="available-seats">{{ bus.available_seats }}</span> seats available</p>
+            <div style="display:flex; gap:.5rem; align-items:center; margin-top:.75rem;">
+                <button type="button" class="btn btn-outline" onclick="changeOccupancy(-1)" aria-label="One student left">−</button>
+                <input id="occupancy-input" type="number" min="0" max="{{ bus.capacity }}" value="{{ bus.occupied_seats }}" aria-label="Students on board" style="width:70px; padding:.55rem; text-align:center;">
+                <button type="button" class="btn btn-outline" onclick="changeOccupancy(1)" aria-label="One student boarded">+</button>
+                <button type="button" class="btn btn-primary" onclick="saveOccupancy()">Save</button>
+            </div>
+            <small id="occupancy-message" class="text-muted" style="display:block; margin-top:.6rem;">Update this whenever students board or leave.</small>
+        </div>
+    </div>
+
+    <!-- GPS Coordinates Display -->
+    {% if driver_profile and driver_profile.status == 'APPROVED' %}
+    <div class="driver-coords">
+        <div class="coord-display">
+            <label>Latitude</label>
+            <span id="current-lat">—</span>
+        </div>
+        <div class="coord-display">
+            <label>Longitude</label>
+            <span id="current-lng">—</span>
+        </div>
+        <div class="coord-display">
+            <label>Accuracy</label>
+            <span id="current-accuracy">—</span>
+        </div>
+        <div class="coord-display">
+            <label>Last Update</label>
+            <span id="last-update">—</span>
+        </div>
+    </div>
+
+    <!-- GPS Sharing Controls -->
+    <div class="driver-controls">
+        <button id="btn-start" class="btn btn-success btn-xl" onclick="startSharing()">
+            <span class="btn-icon">📡</span>
+            START SHARING LOCATION
+        </button>
+        <button id="btn-stop" class="btn btn-danger btn-xl" onclick="stopSharing()" disabled>
+            <span class="btn-icon">⏹️</span>
+            STOP SHARING LOCATION
+        </button>
+    </div>
+    <div style="margin-top:1rem; text-align:center;">
+        <label for="emergency-type" style="display:block; margin-bottom:.45rem; font-weight:700; color:#991b1b;">Emergency type</label>
+        <select id="emergency-type" style="padding:.65rem; border:2px solid #b91c1c; border-radius:8px; margin-bottom:.65rem; font:inherit;">
+            <option value="accident">Accident</option>
+            <option value="mechanical">Mechanical problem</option>
+            <option value="security">Security issue</option>
+            <option value="medical">Medical emergency</option>
+        </select><br>
+        <button id="btn-sos" type="button" class="btn btn-danger btn-xl" onclick="sendEmergencyAlert()" style="background:#b91c1c; border-color:#991b1b;">
+            SOS — EMERGENCY ALERT
+        </button>
+        <p id="sos-message" class="text-muted" style="margin:.6rem 0 0;">Sends your bus, route, latest GPS position, and time to administrators immediately.</p>
+    </div>
+    <div id="emergency-chat" style="display:none; margin-top:1rem; padding:1rem; border:1px solid #bfdbfe; border-radius:10px; background:#eff6ff;">
+        <strong>Emergency message to admin</strong><div id="emergency-chat-messages" class="text-muted" style="margin:.5rem 0"></div>
+        <div style="display:flex; gap:.5rem"><input id="driver-emergency-message" placeholder="Type a message for the admin" style="flex:1; padding:.6rem"><button type="button" class="btn btn-primary" onclick="sendDriverEmergencyMessage()">Send</button></div>
+    </div>
+
+    <!-- GPS Error Message -->
+    <div id="gps-error" class="gps-error" style="display:none;">
+        <span class="error-icon">⚠️</span>
+        <span id="gps-error-text"></span>
+    </div>
+    <div id="emergency-response" role="alert" style="display:none; margin-top:1rem; padding:1rem 1.25rem; border:2px solid #15803d; border-radius:10px; background:#ecfdf5; color:#14532d; font-weight:700;">
+        <span>✓ <span id="emergency-response-text"></span></span>
+    </div>
+
+    <!-- Connection Status -->
+    <div id="ws-status" class="ws-status disconnected">
+        <span id="ws-status-text">⚫ Not connected</span>
+    </div>
+    {% else %}
+    <div class="driver-no-bus" style="margin-top: 2rem;">
+        <div class="no-bus-icon">⏳</div>
+        <h2>Account Pending</h2>
+        <p>Your driver account is waiting for administrator approval. You will be able to share your GPS location once approved.</p>
+    </div>
+    {% endif %}
+
+    {% endif %}
+
+</div><!-- /driver-dashboard -->
+
+<!-- ══════ OFF-ROUTE MODAL ══════ -->
+<div id="off-route-modal" role="alertdialog" aria-modal="true" aria-labelledby="off-route-title">
+    <div class="off-route-modal-box">
+        <!-- Header -->
+        <div class="off-route-header">
+            <div class="off-route-header-icon">🚨</div>
+            <div class="off-route-header-text">
+                <h2 id="off-route-title">You Are Off-Route!</h2>
+                <p>You have left the assigned route. Follow the blue path on the map below to return.</p>
+            </div>
+        </div>
+
+        <!-- Mini-map (Leaflet renders here) -->
+        <div id="driver-mini-map"></div>
+
+        <!-- Footer with nav info -->
+        <div class="off-route-footer">
+            <div id="off-route-nav-info">Calculating route back…</div>
+            <div class="off-route-legend">
+                <div class="off-route-legend-item">
+                    <div class="legend-swatch" style="background:#eab308;"></div> Assigned Route
+                </div>
+                <div class="off-route-legend-item">
+                    <div class="legend-swatch" style="background:#2563eb;"></div> Return Path
+                </div>
+            </div>
+            <button class="off-route-dismiss-btn" onclick="hideOffRouteModal()">
+                ✕ Dismiss (I'm aware)
+            </button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+{% if bus %}
+<!-- Leaflet JS for the off-route mini-map -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/static/js/driver.js?v=emergency-chat-3"></script>
+<script>
+    const BUS_ID = {{ bus.pk }};
+    const WS_URL = (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host + '/ws/tracking/{{ bus.pk }}/';
+
+    // Route waypoint data passed from Django so driver.js can do off-route detection
+    const DRIVER_CONFIG = {
+        routeStart: {
+            name: '{% if bus.route %}{{ bus.route.start_location|escapejs }}{% endif %}',
+            lat:  {% if bus.route and bus.route.start_latitude %}{{ bus.route.start_latitude }}{% else %}null{% endif %},
+            lng:  {% if bus.route and bus.route.start_longitude %}{{ bus.route.start_longitude }}{% else %}null{% endif %},
+        },
+        stops: [
+            {% if bus.route %}{% for stop in bus.route.stops.all %}
+            { name: '{{ stop.name|escapejs }}', lat: {% if stop.latitude %}{{ stop.latitude }}{% else %}null{% endif %}, lng: {% if stop.longitude %}{{ stop.longitude }}{% else %}null{% endif %} }{% if not forloop.last %},{% endif %}
+            {% endfor %}{% endif %}
+        ],
+        routeEnd: {
+            name: '{% if bus.route %}{{ bus.route.destination|escapejs }}{% endif %}',
+            lat:  {% if bus.route and bus.route.destination_latitude %}{{ bus.route.destination_latitude }}{% else %}null{% endif %},
+            lng:  {% if bus.route and bus.route.destination_longitude %}{{ bus.route.destination_longitude }}{% else %}null{% endif %},
+        },
+    };
+
+    document.addEventListener('DOMContentLoaded', function () {
+        initDriverGPS(BUS_ID, WS_URL, DRIVER_CONFIG);
+    });
+</script>
+{% endif %}
+{% endblock %}

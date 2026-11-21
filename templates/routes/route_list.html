@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% block title %}Manage Routes{% endblock %}
+{% block body_class %}admin-page{% endblock %}
+
+{% block content %}
+<div class="admin-layout">
+    {% include "admin_dashboard/_sidebar.html" %}
+
+    <div class="admin-main">
+        <div class="admin-topbar">
+            <h1 class="admin-page-title">Manage Routes</h1>
+            <a href="{% url 'routes:route_create' %}" class="btn btn-primary">➕ Add Route</a>
+        </div>
+
+        <div class="dashboard-section">
+            {% if routes %}
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Route Name</th>
+                            <th>Start Location</th>
+                            <th>Destination</th>
+                            <th>Stops</th>
+                            <th>Active</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for route in routes %}
+                        <tr class="{% if not route.active %}row-inactive{% endif %}">
+                            <td><strong>{{ route.name }}</strong></td>
+                            <td>{{ route.start_location }}</td>
+                            <td>{{ route.destination }}</td>
+                            <td>{{ route.stops.count }}</td>
+                            <td>
+                                <form method="post" action="{% url 'routes:route_toggle_active' route.pk %}" class="inline-form">
+                                    {% csrf_token %}
+                                    {% if route.active %}
+                                    <button type="submit" class="btn btn-sm btn-success">Yes</button>
+                                    {% else %}
+                                    <button type="submit" class="btn btn-sm btn-outline">No</button>
+                                    {% endif %}
+                                </form>
+                            </td>
+                            <td class="action-cell">
+                                <a href="{% url 'routes:route_edit' route.pk %}" class="btn btn-sm btn-primary" title="Edit">✏️</a>
+                                <a href="{% url 'routes:route_delete' route.pk %}" class="btn btn-sm btn-danger" title="Delete">🗑️</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-icon">🗺️</div>
+                <h3>No routes found</h3>
+                <p>Get started by adding your first shuttle route.</p>
+                <a href="{% url 'routes:route_create' %}" class="btn btn-primary mt-3">Add Route</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
