@@ -81,7 +81,13 @@ local `.env`). When `DEBUG=False`, startup fails unless a secret key, PostgreSQL
 
 ## Render deployment
 
-The included `render.yaml` configures a Python web service. Its build command is:
+The included `render.yaml` defines a free-tier Python web service, PostgreSQL
+database, and Redis-compatible Key Value service in the Oregon region. Deploy it
+from Render using **New > Blueprint Instance** and select the GitHub repository.
+Render will prompt before creating the three free services; review the plan for
+each resource and do not select a paid plan. The blueprint wires the database
+and Redis connection URLs to the web service and generates a new `SECRET_KEY`.
+Its build command is:
 
 ```bash
 pip install -r requirements.txt && python manage.py collectstatic --noinput
@@ -94,22 +100,16 @@ Daphne:
 python manage.py migrate --noinput && daphne -b 0.0.0.0 -p $PORT config.asgi:application
 ```
 
-Create the Render web service from the repository and configure these environment
-variables in its dashboard:
+The blueprint sets `DEBUG=False`, generates `SECRET_KEY`, and supplies internal
+`DATABASE_URL` and `REDIS_URL` references. Render supplies `PORT` and
+`RENDER_EXTERNAL_HOSTNAME`. For a custom domain, configure:
 
 | Variable | Value |
 | --- | --- |
-| `DEBUG` | `False` |
-| `SECRET_KEY` | Generate a unique secret in Render; never reuse the local key |
-| `DATABASE_URL` | Internal connection URL for a Render PostgreSQL database |
-| `REDIS_URL` | Connection URL for a Redis-compatible service; use `rediss://` if TLS is required |
 | `ALLOWED_HOSTS` | Optional comma-separated custom hostnames; Render's assigned hostname is added automatically |
 | `CSRF_TRUSTED_ORIGINS` | Optional comma-separated full `https://` origins for custom domains; Render's hostname is added automatically |
 
-Render provides `PORT` and `RENDER_EXTERNAL_HOSTNAME` for the web service. Add
-your custom domain to both the allowed-host and CSRF origin configuration.
-Create the PostgreSQL database and Redis-compatible service separately, then
-copy their connection URLs into the web service's `DATABASE_URL` and `REDIS_URL`.
+Add your custom domain to both the allowed-host and CSRF origin configuration.
 Keep credentials in Render's environment settings rather than in source control.
 
 `collectstatic` runs during the build and WhiteNoise serves compressed,
@@ -119,11 +119,20 @@ model migrations before deploying schema changes.
 
 The app requires Redis in production: an in-memory layer is process-local and
 cannot reliably broadcast updates to users connected to different workers.
-Redis/Key Value availability and pricing depend on the current Render plan. If
-the selected plan does not provide a suitable Redis service, use a reachable
-managed Redis-compatible service or host the ASGI service on a plan/provider
-that supports Redis. Do not remove `REDIS_URL` or use in-memory channels as a
-production multi-worker substitute.
+Render currently offers a free Key Value plan, but free instances do not persist
+data across restarts. This is acceptable for transient Channels group state;
+clients must reconnect after service restarts. If the free plan is unavailable
+in your workspace, stop and use a reachable Redis-compatible provider rather
+than falling back to in-memory channels.
+
+**Free Render services are for testing and hobby projects, not production
+availability.** Free web services spin down after 15 minutes without traffic
+and can take about a minute to wake. Free Postgres is limited to 1 GB, has no
+backups, and expires 30 days after creation. After a further 14-day grace period,
+Render deletes the database and its data. Arrange a verified database export
+and move to a durable database plan before expiration; do not rely on free
+Postgres for irreplaceable live campus data. Check the current Render free-plan
+terms before creating resources.
 
 The existing upload fields continue to use Django's `MEDIA_ROOT`/file storage.
 Render web-service disks are ephemeral, so uploaded logos/profile images can be
