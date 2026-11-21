@@ -94,12 +94,15 @@ CLOUDINARY_CREDENTIALS = {
     'API_SECRET': config('CLOUDINARY_API_SECRET', default='').strip(),
 }
 CLOUDINARY_CONFIGURED = all(CLOUDINARY_CREDENTIALS.values())
+SKIP_CLOUDINARY_CONFIG_CHECK = (
+    os.environ.get('SKIP_CLOUDINARY_CONFIG_CHECK', '').strip() == '1'
+)
 if any(CLOUDINARY_CREDENTIALS.values()) and not CLOUDINARY_CONFIGURED:
     raise ImproperlyConfigured(
         'Configure CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and '
         'CLOUDINARY_API_SECRET together.'
     )
-if not DEBUG and not CLOUDINARY_CONFIGURED:
+if not DEBUG and not CLOUDINARY_CONFIGURED and not SKIP_CLOUDINARY_CONFIG_CHECK:
     raise ImproperlyConfigured(
         'Cloudinary credentials must be configured when DEBUG is False.'
     )

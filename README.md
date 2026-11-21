@@ -93,7 +93,7 @@ and Redis connection URLs to the web service and generates a new `SECRET_KEY`.
 Its build command is:
 
 ```bash
-pip install -r requirements.txt && python manage.py collectstatic --noinput
+pip install -r requirements.txt && SKIP_CLOUDINARY_CONFIG_CHECK=1 python manage.py collectstatic --noinput
 ```
 
 Its start command applies migrations before serving HTTP and WebSockets through
