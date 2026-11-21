@@ -123,7 +123,8 @@ Render currently offers a free Key Value plan, but free instances do not persist
 data across restarts. This is acceptable for transient Channels group state;
 clients must reconnect after service restarts. If the free plan is unavailable
 in your workspace, stop and use a reachable Redis-compatible provider rather
-than falling back to in-memory channels.
+than falling back to in-memory channels. The blueprint does not allow external
+Redis connections; the web service uses the private internal connection.
 
 **Free Render services are for testing and hobby projects, not production
 availability.** Free web services spin down after 15 minutes without traffic

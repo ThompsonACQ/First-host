@@ -26,6 +26,7 @@ services:
     name: campus-shuttle-redis
     plan: free
     region: oregon
+    ipAllowList: []
 databases:
   - name: campus-shuttle-db
     databaseName: campus_shuttle
