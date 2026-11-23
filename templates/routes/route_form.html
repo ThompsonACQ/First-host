@@ -1,9 +1,32 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}{{ title }}{% endblock %}
 {% block body_class %}admin-page{% endblock %}
 
 {% block extra_head %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+    #map-picker { width: 100%; min-height: 300px; }
+    .geocode-result { width: 100%; border: 0; border-bottom: 1px solid #e2e8f0; padding: .65rem .8rem; background: #fff; color: #1e293b; text-align: left; cursor: pointer; }
+    .geocode-result:hover, .geocode-result:focus-visible { background: #eff6ff; }
+    .leaflet-tooltip { max-width: min(280px, 70vw); white-space: normal; font-size: 12px; font-weight: 600; }
+    .map-poi-dot, .map-poi-cluster { display: flex; align-items: center; justify-content: center; border: 2px solid #fff; border-radius: 50%; background: #1677a5; color: #fff; box-shadow: 0 2px 7px rgba(15, 23, 42, .35); font-weight: 800; }
+    .map-poi-dot { width: 18px; height: 18px; font-size: 15px; }
+    .map-poi-cluster { width: 34px; height: 34px; background: #123b5a; font-size: 12px; }
+    .map-poi-popup { min-width: 190px; max-width: 270px; }
+    .map-poi-popup h4 { margin: 0 0 4px; color: #102b46; font-size: 14px; }
+    .map-poi-popup p { margin: 3px 0; color: #526579; font-size: 12px; line-height: 1.4; }
+    .map-poi-actions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+    .map-poi-actions button { padding: 5px 7px; border: 0; border-radius: 5px; background: #176f96; color: white; font-size: 11px; cursor: pointer; }
+    .map-poi-list { max-height: 220px; overflow-y: auto; }
+    .map-poi-list-item { padding: 6px 0; border-bottom: 1px solid #e2e8f0; }
+    @media (max-width: 600px) {
+        .map-picker-container { padding: .75rem !important; }
+        #map-picker { height: 55vh !important; min-height: 300px !important; }
+        #geocode-search { font-size: 16px !important; }
+        #map-target-indicator { max-width: 48%; text-align: right; }
+    }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -22,20 +45,22 @@
                     {% csrf_token %}
                     
                     <!-- Map Picker Section -->
-                    <div class="map-picker-container" style="margin-bottom: 2rem; padding: 1rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+                    <div class="map-picker-container" data-geocode-url="{% url 'routes:geocode' %}" data-landmarks-url="{% url 'routes:landmarks' %}" style="margin-bottom: 2rem; padding: 1rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
                             <h3 style="margin: 0;">Interactive Map Picker</h3>
                             <span id="map-target-indicator" style="font-weight: 600; color: var(--primary); background: rgba(var(--primary-rgb),0.1); padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.9rem;">Target: None selected</span>
                         </div>
-                        <!-- Stage 3: Geocoding Search -->
                         <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem; position: relative;">
-                            <input type="text" id="geocode-search" placeholder="🔍 Search for a place, e.g. CBG Bank, Accra..." style="flex:1; padding: 0.6rem 1rem; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; font-family: inherit;">
-                            <button type="button" id="geocode-btn" class="btn btn-primary btn-sm" style="white-space: nowrap;">🔍 Search</button>
+                            <input type="search" id="geocode-search" placeholder="Search streets, buildings, communities…" aria-label="Search for a place" style="flex:1; min-width:0; padding: 0.6rem 1rem; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; font-family: inherit;">
+                            <button type="button" id="geocode-btn" class="btn btn-primary btn-sm" style="white-space: nowrap;">Search</button>
                         </div>
-                        <ul id="geocode-results" style="list-style:none; margin: 0 0 0.75rem; padding: 0; background: white; border: 1px solid #e2e8f0; border-radius: 8px; max-height: 200px; overflow-y: auto; display: block;"></ul>
-                        <div id="map-picker" style="height: 400px; border-radius: 8px; border: 1px solid #cbd5e1; z-index: 1;"></div>
-                        <p id="map-hint" style="font-size: 0.85rem; color: #64748b; margin-top: 0.5rem;">
-                            ① Click <strong>"📍 Pick on Map"</strong> next to any field below → ② Use the search or click the map to drop a pin → ③ Drag the pin to fine-tune.
+                        <ul id="geocode-results" role="listbox" aria-label="Place search results" style="list-style:none; margin: 0 0 0.75rem; padding: 0; background: white; border: 1px solid #e2e8f0; border-radius: 8px; max-height: 200px; overflow-y: auto; display: none;"></ul>
+                        <div id="map-picker" style="height: min(55vh, 480px); min-height: 300px; border-radius: 8px; border: 1px solid #cbd5e1; z-index: 1;"></div>
+                        <p id="map-hint" role="status" aria-live="polite" style="font-size: 0.85rem; color: #64748b; margin-top: 0.5rem;">
+                            Select a location field, then search or click the map. Drag the pin to fine-tune the saved coordinates.
+                        </p>
+                        <p id="landmark-status" role="status" aria-live="polite" style="font-size: 0.82rem; color: #526579; margin: 0.35rem 0 0;">
+                            OpenStreetMap place names and landmarks load as you zoom in. © OpenStreetMap contributors.
                         </p>
                     </div>
                     
@@ -77,7 +102,7 @@
                             {{ form.start_longitude.errors }}
                         </div>
                         <div class="form-group" style="padding-bottom: 0.5rem;">
-                            <button type="button" class="btn btn-outline btn-sm pick-map-btn" data-lat-target="{{ form.start_latitude.id_for_label }}" data-lng-target="{{ form.start_longitude.id_for_label }}" data-name="Start Location">📍 Pick on Map</button>
+                            <button type="button" class="btn btn-outline btn-sm pick-map-btn" data-lat-target="{{ form.start_latitude.id_for_label }}" data-lng-target="{{ form.start_longitude.id_for_label }}" data-name-target="{{ form.start_location.id_for_label }}" data-name="Start Location">📍 Pick on Map</button>
                         </div>
                     </div>
 
@@ -99,7 +124,7 @@
                             {{ form.destination_longitude.errors }}
                         </div>
                         <div class="form-group" style="padding-bottom: 0.5rem;">
-                            <button type="button" class="btn btn-outline btn-sm pick-map-btn" data-lat-target="{{ form.destination_latitude.id_for_label }}" data-lng-target="{{ form.destination_longitude.id_for_label }}" data-name="Destination">📍 Pick on Map</button>
+                            <button type="button" class="btn btn-outline btn-sm pick-map-btn" data-lat-target="{{ form.destination_latitude.id_for_label }}" data-lng-target="{{ form.destination_longitude.id_for_label }}" data-name-target="{{ form.destination.id_for_label }}" data-name="Destination">📍 Pick on Map</button>
                         </div>
                     </div>
 
@@ -131,7 +156,7 @@
                                     {{ stop_form.longitude }}
                                 </div>
                                 <div class="form-group col-2" style="padding-bottom: 0.5rem;">
-                                    <button type="button" class="btn btn-outline btn-sm pick-map-btn" style="padding: 0.4rem;" data-lat-target="{{ stop_form.latitude.id_for_label }}" data-lng-target="{{ stop_form.longitude.id_for_label }}" data-name="Route Stop">📍 Pick</button>
+                                    <button type="button" class="btn btn-outline btn-sm pick-map-btn" style="padding: 0.4rem;" data-lat-target="{{ stop_form.latitude.id_for_label }}" data-lng-target="{{ stop_form.longitude.id_for_label }}" data-name-target="{{ stop_form.name.id_for_label }}" data-name="Route Stop">📍 Pick</button>
                                 </div>
                                 <div class="form-group col-1 delete-col" style="padding-bottom: 0.5rem;">
                                     {% if stop_form.instance.pk %}
@@ -143,6 +168,7 @@
                         </div>
                         {% endfor %}
                     </div>
+                    <button type="button" class="btn btn-outline btn-sm" id="add-route-stop">+ Add another stop</button>
 
                     <div class="form-actions mt-4">
                         <button type="submit" class="btn btn-primary btn-lg">Save Route</button>
@@ -187,38 +213,352 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     const initCenter = firstSavedCoord();
-    const map = L.map('map-picker').setView(initCenter, 13);
+    const map = L.map('map-picker', { scrollWheelZoom: true }).setView(initCenter, 13);
     L.tileLayer(
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
         {
             maxZoom: 19,
-            attribution: 'Tiles &copy; <a href="https://www.esri.com/">Esri</a> &mdash; Sources: Esri, HERE, Garmin, FAO, NOAA, USGS, OpenStreetMap contributors'
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>'
         }
     ).addTo(map);
 
     let pickerMarker = null;   // The single draggable "active" marker
     let activeLatInput = null;
     let activeLngInput = null;
+    let activeNameInput = null;
     const targetIndicator = document.getElementById('map-target-indicator');
+    const mapHint = document.getElementById('map-hint');
+    const pickerContainer = document.querySelector('.map-picker-container');
+    const geocodeUrl = pickerContainer.dataset.geocodeUrl;
+    const landmarksUrl = pickerContainer.dataset.landmarksUrl;
+    const landmarkStatus = document.getElementById('landmark-status');
+    const landmarkLayer = L.layerGroup().addTo(map);
+    let landmarkFeatures = [];
+    let landmarkLoadTimer = null;
+    let landmarkRetryTimer = null;
+    let activeLandmarkRequest = null;
+    let lastLandmarkBoundsKey = '';
 
-    // ── Helper: attach dragend to a marker ───────────────────────────────────
-    function attachDragEnd(marker) {
-        marker.on('dragend', function(e) {
-            const pos = e.target.getLatLng();
-            if (activeLatInput && activeLngInput) {
-                document.getElementById(activeLatInput).value = pos.lat.toFixed(6);
-                document.getElementById(activeLngInput).value = pos.lng.toFixed(6);
-            }
+    function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, function(character) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character];
         });
+    }
+
+    function setPickerTarget(latId, lngId, nameId, label) {
+        activeLatInput = latId;
+        activeLngInput = lngId;
+        activeNameInput = nameId;
+        targetIndicator.textContent = 'Target: ' + label;
+        document.querySelectorAll('.pick-map-btn').forEach(function(button) {
+            const isSelected = button.dataset.latTarget === latId;
+            button.classList.toggle('btn-primary', isSelected);
+            button.classList.toggle('btn-outline', !isSelected);
+        });
+    }
+
+    function findStopTarget() {
+        const totalForms = document.getElementById('id_stops-TOTAL_FORMS');
+        const count = totalForms ? Number(totalForms.value) : 0;
+        for (let index = 0; index < count; index++) {
+            const name = document.getElementById(`id_stops-${index}-name`);
+            const lat = document.getElementById(`id_stops-${index}-latitude`);
+            const lng = document.getElementById(`id_stops-${index}-longitude`);
+            const deleted = document.getElementById(`id_stops-${index}-DELETE`);
+            if (name && lat && lng && !name.value.trim() && !lat.value && !lng.value && !(deleted && deleted.checked)) {
+                return { latId: lat.id, lngId: lng.id, nameId: name.id, label: `Route Stop ${index + 1}` };
+            }
+        }
+        const addButton = document.getElementById('add-route-stop');
+        if (!addButton || !totalForms) return null;
+        addButton.click();
+        const index = Number(totalForms.value) - 1;
+        const name = document.getElementById(`id_stops-${index}-name`);
+        const lat = document.getElementById(`id_stops-${index}-latitude`);
+        const lng = document.getElementById(`id_stops-${index}-longitude`);
+        return name && lat && lng
+            ? { latId: lat.id, lngId: lng.id, nameId: name.id, label: `Route Stop ${index + 1}` }
+            : null;
+    }
+
+    function selectLandmark(feature, target) {
+        let fields;
+        if (target === 'start') {
+            fields = {
+                latId: 'id_start_latitude',
+                lngId: 'id_start_longitude',
+                nameId: 'id_start_location',
+                label: 'Start'
+            };
+        } else if (target === 'destination') {
+            fields = {
+                latId: 'id_destination_latitude',
+                lngId: 'id_destination_longitude',
+                nameId: 'id_destination',
+                label: 'Destination'
+            };
+        } else {
+            fields = findStopTarget();
+        }
+        if (!fields) {
+            landmarkStatus.textContent = 'Add a route stop before selecting this place as a stop.';
+            return;
+        }
+        setPickerTarget(fields.latId, fields.lngId, fields.nameId, fields.label);
+        const nameField = document.getElementById(fields.nameId);
+        const latField = document.getElementById(fields.latId);
+        const lngField = document.getElementById(fields.lngId);
+        nameField.value = feature.name;
+        latField.value = Number(feature.lat).toFixed(6);
+        lngField.value = Number(feature.lon).toFixed(6);
+        nameField.dispatchEvent(new Event('input', { bubbles: true }));
+        nameField.dispatchEvent(new Event('change', { bubbles: true }));
+        map.setView([feature.lat, feature.lon], Math.max(map.getZoom(), 17));
+        placePickerMarker(feature.lat, feature.lon);
+        mapHint.textContent = `${feature.name} — ${feature.category}`;
+        landmarkStatus.textContent = `${feature.name} selected as ${fields.label.toLowerCase()}. Coordinates saved to the route form.`;
+    }
+
+    function makeFeaturePopup(feature) {
+        const popup = document.createElement('div');
+        popup.className = 'map-poi-popup';
+        const title = document.createElement('h4');
+        title.textContent = feature.name;
+        popup.appendChild(title);
+        const category = document.createElement('p');
+        category.textContent = feature.category;
+        popup.appendChild(category);
+        if (feature.address) {
+            const address = document.createElement('p');
+            address.textContent = feature.address;
+            popup.appendChild(address);
+        }
+        const coordinates = document.createElement('p');
+        coordinates.textContent = `${Number(feature.lat).toFixed(6)}, ${Number(feature.lon).toFixed(6)}`;
+        popup.appendChild(coordinates);
+        const actions = document.createElement('div');
+        actions.className = 'map-poi-actions';
+        [
+            ['start', 'Use as pickup'],
+            ['destination', 'Use as destination'],
+            ['stop', 'Use as stop']
+        ].forEach(function(action) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.textContent = action[1];
+            button.addEventListener('click', function() {
+                selectLandmark(feature, action[0]);
+                map.closePopup();
+            });
+            actions.appendChild(button);
+        });
+        popup.appendChild(actions);
+        return popup;
+    }
+
+    function makeClusterPopup(features) {
+        const popup = document.createElement('div');
+        popup.className = 'map-poi-popup map-poi-list';
+        const title = document.createElement('h4');
+        title.textContent = `${features.length} nearby places`;
+        popup.appendChild(title);
+        features.slice(0, 30).forEach(function(feature) {
+            const item = document.createElement('div');
+            item.className = 'map-poi-list-item';
+            const name = document.createElement('p');
+            name.textContent = `${feature.name} · ${feature.category}`;
+            item.appendChild(name);
+            const actions = document.createElement('div');
+            actions.className = 'map-poi-actions';
+            [['start', 'Pickup'], ['destination', 'Destination'], ['stop', 'Stop']].forEach(function(action) {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.textContent = action[1];
+                button.addEventListener('click', function() {
+                    selectLandmark(feature, action[0]);
+                    map.closePopup();
+                });
+                actions.appendChild(button);
+            });
+            item.appendChild(actions);
+            popup.appendChild(item);
+        });
+        return popup;
+    }
+
+    function renderLandmarks() {
+        landmarkLayer.clearLayers();
+        const zoom = map.getZoom();
+        if (zoom < 12) return;
+        const visible = landmarkFeatures.filter(function(feature) {
+            return map.getBounds().contains([feature.lat, feature.lon]);
+        });
+        const groups = new Map();
+        visible.forEach(function(feature) {
+            const point = map.latLngToContainerPoint([feature.lat, feature.lon]);
+            const cell = zoom >= 17 ? `${feature.id}` : `${Math.floor(point.x / 56)}:${Math.floor(point.y / 56)}`;
+            if (!groups.has(cell)) groups.set(cell, []);
+            groups.get(cell).push(feature);
+        });
+        groups.forEach(function(features) {
+            if (features.length === 1 || zoom >= 17) {
+                features.forEach(function(feature) {
+                    const marker = L.marker([feature.lat, feature.lon], {
+                        icon: L.divIcon({
+                            className: 'map-poi-icon',
+                            html: '<span class="map-poi-dot" aria-hidden="true">•</span>',
+                            iconSize: [20, 20],
+                            iconAnchor: [10, 10]
+                        }),
+                        zIndexOffset: 300
+                    }).addTo(landmarkLayer);
+                    marker.bindPopup(makeFeaturePopup(feature));
+                    if (zoom >= 17) marker.bindTooltip(escapeHtml(feature.name), { permanent: true, direction: 'top', offset: [0, -9] });
+                });
+                return;
+            }
+            const center = features.reduce(function(result, feature) {
+                result.lat += feature.lat;
+                result.lon += feature.lon;
+                return result;
+            }, { lat: 0, lon: 0 });
+            center.lat /= features.length;
+            center.lon /= features.length;
+            const marker = L.marker([center.lat, center.lon], {
+                icon: L.divIcon({
+                    className: 'map-poi-icon',
+                    html: `<span class="map-poi-cluster">${features.length}</span>`,
+                    iconSize: [38, 38],
+                    iconAnchor: [19, 19]
+                }),
+                zIndexOffset: 400
+            }).addTo(landmarkLayer);
+            marker.bindPopup(makeClusterPopup(features));
+            marker.on('click', function() {
+                if (map.getZoom() < 17) map.setView(center, map.getZoom() + 2);
+            });
+        });
+    }
+
+    async function loadLandmarks(retry) {
+        const zoom = map.getZoom();
+        if (zoom < 12) {
+            landmarkFeatures = [];
+            landmarkLayer.clearLayers();
+            landmarkStatus.textContent = 'Zoom in to level 12 or closer to explore named places and landmarks.';
+            lastLandmarkBoundsKey = '';
+            return;
+        }
+        const bounds = map.getBounds();
+        const values = [bounds.getSouth(), bounds.getWest(), bounds.getNorth(), bounds.getEast(), zoom]
+            .map(function(value, index) { return index === 4 ? String(value) : value.toFixed(3); });
+        const boundsKey = values.join(',');
+        if (boundsKey === lastLandmarkBoundsKey && !retry) {
+            renderLandmarks();
+            return;
+        }
+        if (activeLandmarkRequest) activeLandmarkRequest.abort();
+        const requestController = new AbortController();
+        activeLandmarkRequest = requestController;
+        const params = new URLSearchParams({
+            south: values[0],
+            west: values[1],
+            north: values[2],
+            east: values[3],
+            zoom: String(zoom)
+        });
+        landmarkStatus.textContent = 'Loading real OpenStreetMap places…';
+        try {
+            const response = await fetch(`${landmarksUrl}?${params.toString()}`, {
+                headers: { Accept: 'application/json' },
+                signal: requestController.signal
+            });
+            const result = await response.json();
+            if (response.status === 429 && !retry) {
+                landmarkStatus.textContent = result.detail || 'Nearby-place search is briefly cooling down…';
+                clearTimeout(landmarkRetryTimer);
+                landmarkRetryTimer = setTimeout(function() { loadLandmarks(true); }, 2200);
+                return;
+            }
+            if (!response.ok) throw new Error(result.detail || 'Nearby places could not be loaded.');
+            landmarkFeatures = Array.isArray(result.features) ? result.features : [];
+            lastLandmarkBoundsKey = boundsKey;
+            renderLandmarks();
+            landmarkStatus.textContent = landmarkFeatures.length
+                ? `${landmarkFeatures.length} named OpenStreetMap places shown. Click a marker for details and route actions.`
+                : 'No named places are available in this map area yet. Try zooming or moving the map.';
+        } catch (error) {
+            if (error.name === 'AbortError') return;
+            landmarkStatus.textContent = error.message || 'Nearby places are temporarily unavailable. The map and route fields still work.';
+        } finally {
+            if (activeLandmarkRequest === requestController) activeLandmarkRequest = null;
+        }
+    }
+
+    function scheduleLandmarkLoad() {
+        clearTimeout(landmarkLoadTimer);
+        landmarkLoadTimer = setTimeout(function() { loadLandmarks(false); }, 700);
+    }
+
+    map.on('moveend', scheduleLandmarkLoad);
+    map.on('zoomend', renderLandmarks);
+    scheduleLandmarkLoad();
+
+    function setLocationName(name) {
+        const nameInput = activeNameInput && document.getElementById(activeNameInput);
+        if (nameInput && name) nameInput.value = name;
+        if (pickerMarker && name) pickerMarker.setTooltipContent(name);
+    }
+
+    function saveActiveCoordinates(lat, lng) {
+        if (!activeLatInput || !activeLngInput) return;
+        document.getElementById(activeLatInput).value = lat.toFixed(6);
+        document.getElementById(activeLngInput).value = lng.toFixed(6);
+    }
+
+    async function reverseLookup(lat, lng) {
+        if (!activeLatInput || !activeLngInput) return;
+        mapHint.textContent = 'Finding the place name…';
+        try {
+            const response = await fetch(`${geocodeUrl}?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`, {
+                headers: { Accept: 'application/json' }
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.detail || 'Place name lookup failed.');
+            if (result.name) {
+                setLocationName(result.name);
+                mapHint.textContent = result.display_name;
+            } else {
+                mapHint.textContent = 'Coordinates saved. No nearby place name was found; enter a name in the selected field.';
+            }
+        } catch (error) {
+            mapHint.textContent = error.message || 'Coordinates saved, but place-name lookup is unavailable.';
+        }
+    }
+
+    function persistMarkerPosition(lat, lng, lookupName) {
+        saveActiveCoordinates(lat, lng);
+        if (pickerMarker && activeNameInput) {
+            const selectedName = document.getElementById(activeNameInput).value.trim();
+            pickerMarker.setTooltipContent(selectedName || 'Selected location');
+        }
+        if (lookupName) reverseLookup(lat, lng);
     }
 
     // ── Helper: place or move the draggable picker marker ───────────────────
     function placePickerMarker(lat, lng) {
+        const nameInput = activeNameInput && document.getElementById(activeNameInput);
+        const label = (nameInput && nameInput.value.trim()) || 'Selected location';
         if (!pickerMarker) {
             pickerMarker = L.marker([lat, lng], { draggable: true, zIndexOffset: 1000 }).addTo(map);
-            attachDragEnd(pickerMarker);
+            pickerMarker.bindTooltip(label, { permanent: true, direction: 'top', offset: [0, -10] }).openTooltip();
+            pickerMarker.on('dragend', function(event) {
+                const position = event.target.getLatLng();
+                persistMarkerPosition(position.lat, position.lng, true);
+            });
         } else {
             pickerMarker.setLatLng([lat, lng]);
+            pickerMarker.setTooltipContent(label);
         }
     }
 
@@ -232,101 +572,98 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         const { lat, lng } = e.latlng;
         placePickerMarker(lat, lng);
-        document.getElementById(activeLatInput).value = lat.toFixed(6);
-        document.getElementById(activeLngInput).value = lng.toFixed(6);
+        persistMarkerPosition(lat, lng, true);
     });
 
     // ── 3. "Pick on Map" button activation ───────────────────────────────────
-    const pickButtons = document.querySelectorAll('.pick-map-btn');
-    pickButtons.forEach(function(btn) {
-        btn.addEventListener('click', function(e) {
-            e.preventDefault();
+    document.addEventListener('click', function(event) {
+        const btn = event.target.closest('.pick-map-btn');
+        if (!btn) return;
+        event.preventDefault();
 
-            // Deactivate all, activate this one
-            pickButtons.forEach(function(b) {
-                b.classList.remove('btn-primary');
-                b.classList.add('btn-outline');
-            });
-            this.classList.remove('btn-outline');
-            this.classList.add('btn-primary');
-
-            activeLatInput = this.getAttribute('data-lat-target');
-            activeLngInput = this.getAttribute('data-lng-target');
-            const name = this.getAttribute('data-name');
-            targetIndicator.innerText = 'Target: ' + name;
-
-            // If fields already have coords, center map there
-            const curLat = document.getElementById(activeLatInput)
-                           ? document.getElementById(activeLatInput).value : '';
-            const curLng = document.getElementById(activeLngInput)
-                           ? document.getElementById(activeLngInput).value : '';
-
-            if (curLat && curLng) {
-                const lat = parseFloat(curLat), lng = parseFloat(curLng);
-                map.setView([lat, lng], 16);
-                placePickerMarker(lat, lng);
-            }
-
-            // Scroll smoothly to map
-            document.querySelector('.map-picker-container')
-                    .scrollIntoView({ behavior: 'smooth', block: 'center' });
+        document.querySelectorAll('.pick-map-btn').forEach(function(button) {
+            button.classList.remove('btn-primary');
+            button.classList.add('btn-outline');
         });
+        btn.classList.remove('btn-outline');
+        btn.classList.add('btn-primary');
+
+        activeLatInput = btn.dataset.latTarget;
+        activeLngInput = btn.dataset.lngTarget;
+        activeNameInput = btn.dataset.nameTarget;
+        targetIndicator.textContent = 'Target: ' + btn.dataset.name;
+
+        const curLat = document.getElementById(activeLatInput).value;
+        const curLng = document.getElementById(activeLngInput).value;
+        if (curLat && curLng) {
+            const lat = parseFloat(curLat), lng = parseFloat(curLng);
+            map.setView([lat, lng], 17);
+            placePickerMarker(lat, lng);
+        }
+
+        document.querySelector('.map-picker-container')
+            .scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
 
-    // ── Stage 3: Nominatim geocoding search ──────────────────────────────────
+    // ── Place search through the server-side, rate-limited Nominatim proxy ───
     const searchInput = document.getElementById('geocode-search');
     const searchBtn   = document.getElementById('geocode-btn');
     const searchResults = document.getElementById('geocode-results');
 
-    function doSearch() {
+    async function doSearch() {
         const query = searchInput.value.trim();
-        if (!query) return;
+        if (!query || !activeLatInput || !activeLngInput) {
+            mapHint.textContent = query
+                ? 'Select Start, Destination, or a Route Stop before searching.'
+                : 'Enter a street, building, community, or landmark to search.';
+            return;
+        }
 
-        searchBtn.textContent = '⏳';
+        searchBtn.textContent = 'Searching…';
         searchBtn.disabled = true;
-        searchResults.innerHTML = '';
-
-        fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(query)}`, {
-            headers: { 'Accept-Language': 'en' }
-        })
-        .then(r => r.json())
-        .then(function(results) {
-            searchBtn.textContent = '🔍 Search';
-            searchBtn.disabled = false;
-
+        searchResults.replaceChildren();
+        searchResults.style.display = 'none';
+        try {
+            const response = await fetch(`${geocodeUrl}?q=${encodeURIComponent(query)}`, {
+                headers: { Accept: 'application/json' }
+            });
+            const results = await response.json();
+            if (!response.ok) throw new Error(results.detail || 'Place search failed.');
             if (!results.length) {
-                searchResults.innerHTML = '<li style="padding:0.5rem;color:#64748b;">No results found.</li>';
+                mapHint.textContent = 'No places found. Try a nearby street, community, or landmark.';
                 return;
             }
 
             results.forEach(function(result) {
-                const li = document.createElement('li');
-                li.textContent = result.display_name;
-                li.style.cssText = 'padding:0.5rem 0.75rem;cursor:pointer;border-bottom:1px solid #e2e8f0;font-size:0.85rem;';
-                li.addEventListener('mouseenter', () => li.style.background = '#f1f5f9');
-                li.addEventListener('mouseleave', () => li.style.background = '');
-                li.addEventListener('click', function() {
+                const item = document.createElement('li');
+                item.setAttribute('role', 'option');
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'geocode-result';
+                button.textContent = result.display_name;
+                button.addEventListener('click', function() {
                     const lat = parseFloat(result.lat);
                     const lng = parseFloat(result.lon);
-                    map.setView([lat, lng], 16);
+                    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+                    map.setView([lat, lng], 17);
                     placePickerMarker(lat, lng);
-
-                    // Also fill in the active lat/lng fields if a target is active
-                    if (activeLatInput && activeLngInput) {
-                        document.getElementById(activeLatInput).value = lat.toFixed(6);
-                        document.getElementById(activeLngInput).value = lng.toFixed(6);
-                    }
-                    searchResults.innerHTML = '';
-                    searchInput.value = result.display_name.split(',')[0];
+                    setLocationName(result.name || result.display_name.split(',')[0]);
+                    persistMarkerPosition(lat, lng, false);
+                    mapHint.textContent = result.display_name;
+                    searchResults.replaceChildren();
+                    searchResults.style.display = 'none';
                 });
-                searchResults.appendChild(li);
+                item.appendChild(button);
+                searchResults.appendChild(item);
             });
-        })
-        .catch(function() {
-            searchBtn.textContent = '🔍 Search';
+            searchResults.style.display = 'block';
+            mapHint.textContent = 'Choose a result to center the map and set the selected location.';
+        } catch (error) {
+            mapHint.textContent = error.message || 'Place search is temporarily unavailable.';
+        } finally {
+            searchBtn.textContent = 'Search';
             searchBtn.disabled = false;
-            searchResults.innerHTML = '<li style="padding:0.5rem;color:#ef4444;">Search failed. Check your connection.</li>';
-        });
+        }
     }
 
     if (searchBtn) {
@@ -357,9 +694,17 @@ document.addEventListener('DOMContentLoaded', function() {
             const lat = parseFloat(latEl.value);
             const lng = parseFloat(lngEl.value);
             if (!isNaN(lat) && !isNaN(lng)) {
+                const nameId = latId
+                    .replace('start_latitude', 'start_location')
+                    .replace('destination_latitude', 'destination')
+                    .replace(/-latitude$/, '-name');
+                const nameField = document.getElementById(nameId);
+                const markerLabel = nameField && nameField.value.trim()
+                    ? nameField.value.trim()
+                    : label;
                 L.marker([lat, lng], { icon: savedIcon })
                  .addTo(map)
-                 .bindTooltip(label, { permanent: false, direction: 'top' });
+                 .bindTooltip(markerLabel, { permanent: true, direction: 'top' });
                 savedCoords.push([lat, lng]);
             }
         }
@@ -370,7 +715,7 @@ document.addEventListener('DOMContentLoaded', function() {
     tryAddSavedMarker('id_destination_latitude', 'id_destination_longitude', 'Destination');
 
     // Formset stops — Django names them stops-0-latitude, stops-1-latitude, etc.
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 100; i++) {
         tryAddSavedMarker(`id_stops-${i}-latitude`, `id_stops-${i}-longitude`, `Stop ${i + 1}`);
     }
 
@@ -380,6 +725,40 @@ document.addEventListener('DOMContentLoaded', function() {
     } else if (savedCoords.length === 1) {
         map.setView(savedCoords[0], 15);
     }
+
+    // Let admins add multiple pickup stops without changing the model/formset.
+    const addStopButton = document.getElementById('add-route-stop');
+    const stopsContainer = document.getElementById('stops-container');
+    const totalForms = document.getElementById('id_stops-TOTAL_FORMS');
+    if (addStopButton && stopsContainer && totalForms) {
+        addStopButton.addEventListener('click', function() {
+            const formIndex = Number(totalForms.value);
+            const rows = stopsContainer.querySelectorAll('.stop-form-row');
+            const source = rows[rows.length - 1];
+            if (!source) return;
+
+            const row = source.cloneNode(true);
+            row.innerHTML = row.innerHTML.replace(/stops-\d+/g, `stops-${formIndex}`);
+            row.querySelectorAll('input').forEach(function(input) {
+                if (input.type === 'checkbox') {
+                    input.checked = false;
+                } else if (input.type === 'hidden') {
+                    if (input.name.endsWith('-id')) input.value = '';
+                } else {
+                    input.value = '';
+                }
+            });
+            const orderInput = row.querySelector('input[name$="-stop_order"]');
+            if (orderInput) orderInput.value = String(formIndex + 1);
+            const deleteColumn = row.querySelector('.delete-col');
+            if (deleteColumn) deleteColumn.replaceChildren();
+
+            stopsContainer.appendChild(row);
+            totalForms.value = String(formIndex + 1);
+        });
+    }
+
+    map.whenReady(() => setTimeout(() => map.invalidateSize(), 0));
 
 });
 </script>

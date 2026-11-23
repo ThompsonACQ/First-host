@@ -7,6 +7,8 @@ from . import views
 app_name = 'routes'
 
 urlpatterns = [
+    path('geocode/', views.route_geocode, name='geocode'),
+    path('landmarks/', views.route_landmarks_api, name='landmarks'),
     path('routes/', views.route_list, name='route_list'),
     path('routes/create/', views.route_create, name='route_create'),
     path('routes/<int:pk>/edit/', views.route_edit, name='route_edit'),

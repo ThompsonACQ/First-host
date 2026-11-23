@@ -32,7 +32,13 @@
                             <td><strong>{{ route.name }}</strong></td>
                             <td>{{ route.start_location }}</td>
                             <td>{{ route.destination }}</td>
-                            <td>{{ route.stops.count }}</td>
+                            <td>
+                                {% for stop in route.stops.all %}
+                                <div>{{ stop.name }}</div>
+                                {% empty %}
+                                <span class="text-muted">No intermediate stops</span>
+                                {% endfor %}
+                            </td>
                             <td>
                                 <form method="post" action="{% url 'routes:route_toggle_active' route.pk %}" class="inline-form">
                                     {% csrf_token %}
