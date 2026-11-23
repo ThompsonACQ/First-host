@@ -30,7 +30,12 @@ urlpatterns = [
     path('api/tracking/', include('tracking.api_urls')),
 ]
 
-# Serve media files in development
-if settings.DEBUG:
+# Serve local media uploads on both development and Render fallback instances.
+# Cloudinary returns an external URL and does not use this route.
+default_storage = settings.STORAGES['default']['BACKEND']
+if default_storage == 'django.core.files.storage.FileSystemStorage':
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+# Serve static files only in development; production uses WhiteNoise.
+if settings.DEBUG:
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

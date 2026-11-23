@@ -5,6 +5,13 @@ import math
 
 from PIL import Image, UnidentifiedImageError
 
+from .models import (
+    DEFAULT_ACCENT_COLOR,
+    DEFAULT_BRAND_PALETTE,
+    DEFAULT_PRIMARY_COLOR,
+    DEFAULT_SECONDARY_COLOR,
+)
+
 
 def _hex_color(rgb):
     return '#{:02X}{:02X}{:02X}'.format(*rgb)
@@ -66,3 +73,14 @@ def extract_colors_from_logo(logo_file):
         return None
 
     return tuple(_hex_color(color) for color in distinct)
+
+
+def apply_default_branding(school):
+    """Restore the built-in logo palette when the custom logo is cleared."""
+    school.primary_color = DEFAULT_PRIMARY_COLOR
+    school.secondary_color = DEFAULT_SECONDARY_COLOR
+    school.accent_color = DEFAULT_ACCENT_COLOR
+    school.auto_primary_color = DEFAULT_PRIMARY_COLOR
+    school.auto_secondary_color = DEFAULT_SECONDARY_COLOR
+    school.auto_accent_color = DEFAULT_ACCENT_COLOR
+    school.auto_palette = list(DEFAULT_BRAND_PALETTE)

@@ -6,13 +6,14 @@ import json
 import logging
 
 from django import forms
+from django.conf import settings
 from django.contrib import messages
 from django.http import JsonResponse
 from django.shortcuts import render, redirect
 from django.views.decorators.http import require_POST
 
 from .models import SchoolSettings
-from .branding import extract_colors_from_logo
+from .branding import apply_default_branding, extract_colors_from_logo
 from accounts.decorators import admin_required
 
 logger = logging.getLogger(__name__)
@@ -67,9 +68,24 @@ def home(request):
     """
     Public home page — all content comes from SchoolSettings in the DB.
     """
-    from buses.models import Bus
-    buses = Bus.objects.filter(active=True).select_related('route', 'driver')
-    return render(request, 'home.html', {'buses': buses})
+    from routes.models import Route
+
+    routes = Route.objects.filter(active=True).prefetch_related('stops').order_by('name')
+    locations = {}
+    for route in routes:
+        route_locations = [
+            route.start_location,
+            *(stop.name for stop in route.stops.all()),
+            route.destination,
+        ]
+        for location in route_locations:
+            location = location.strip()
+            if location:
+                locations.setdefault(location.casefold(), location)
+
+    return render(request, 'home.html', {
+        'route_locations': sorted(locations.values(), key=str.casefold),
+    })
 
 
 # -----------------------------------------------------------------------
@@ -86,6 +102,7 @@ def settings_view(request):
         if form.is_valid():
             instance = form.save(commit=False)
 
+            logo_cleared = 'logo' in form.changed_data and not instance.logo
             # A new logo always becomes the active source of the brand palette.
             if 'logo' in request.FILES:
                 logo_file = request.FILES['logo']
@@ -105,11 +122,17 @@ def settings_view(request):
                     instance.secondary_color = secondary
                     instance.accent_color = accent
                 else:
+                    instance.auto_palette = []
+                    instance.auto_primary_color = ''
+                    instance.auto_secondary_color = ''
+                    instance.auto_accent_color = ''
                     logger.warning('Could not extract a color palette from uploaded school logo.')
                     messages.warning(
                         request,
                         'Logo saved, but its colors could not be detected. Set the theme colors manually.',
                     )
+            elif logo_cleared:
+                apply_default_branding(instance)
 
             instance.save()
             messages.success(request, 'School settings saved successfully.')
@@ -150,7 +173,15 @@ def preview_api(request):
     Called by the settings JS before the admin saves.
     """
     school = SchoolSettings.get_settings()
-    logo_url = school.logo.url if school.has_logo else ''
+    logo_url = request.build_absolute_uri('/static/images/default-school-logo.png')
+    if school.has_logo:
+        uploaded_url = school.logo.url
+        if not (
+            uploaded_url.startswith('/media/')
+            and not settings.DEBUG
+            and not getattr(settings, 'CLOUDINARY_CONFIGURED', False)
+        ):
+            logo_url = uploaded_url
     return JsonResponse({
         'school_name': school.school_name,
         'motto': school.motto,

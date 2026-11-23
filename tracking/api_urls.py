@@ -6,5 +6,6 @@ from . import views
 
 urlpatterns = [
     path('bus/<int:bus_id>/status/', views.bus_status_api, name='bus_status_api'),
+    path('route-search/', views.route_search_api, name='route_search_api'),
     path('journey-plan/', views.journey_plan_api, name='journey_plan_api'),
 ]

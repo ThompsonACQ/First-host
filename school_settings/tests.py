@@ -105,6 +105,69 @@ class LogoUploadViewTests(TestCase):
         self.assertEqual(school.auto_palette, ['#C8102E', '#F4C542', '#2E3192'])
         self.assertEqual(school.primary_color, school.auto_primary_color)
 
+    def test_clearing_logo_restores_default_logo_and_brand_palette(self):
+        image_data = BytesIO()
+        Image.new('RGB', (16, 16), '#C8102E').save(image_data, format='PNG')
+        admin = get_user_model().objects.create_superuser(
+            username='clear-logo-admin',
+            email='clear-logo@example.com',
+            password='test-password',
+        )
+        self.client.force_login(admin)
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                school = SchoolSettings.get_settings()
+                school.logo.save(
+                    'custom-logo.png',
+                    SimpleUploadedFile(
+                        'custom-logo.png',
+                        image_data.getvalue(),
+                        content_type='image/png',
+                    ),
+                    save=False,
+                )
+                school.primary_color = '#C8102E'
+                school.secondary_color = '#F4C542'
+                school.accent_color = '#2E3192'
+                school.auto_primary_color = '#C8102E'
+                school.auto_secondary_color = '#F4C542'
+                school.auto_accent_color = '#2E3192'
+                school.auto_palette = ['#C8102E', '#F4C542', '#2E3192']
+                school.save()
+
+                response = self.client.post('/settings/', {
+                    'school_name': school.school_name,
+                    'motto': school.motto,
+                    'description': school.description,
+                    'about': school.about,
+                    'address': school.address,
+                    'phone': school.phone,
+                    'email': school.email,
+                    'website': school.website,
+                    'primary_color': school.primary_color,
+                    'secondary_color': school.secondary_color,
+                    'accent_color': school.accent_color,
+                    'logo-clear': 'on',
+                })
+
+                school.refresh_from_db()
+                self.assertEqual(response.status_code, 302)
+                self.assertFalse(school.logo)
+                self.assertEqual(school.primary_color, '#2E3192')
+                self.assertEqual(school.secondary_color, '#0F172A')
+                self.assertEqual(school.accent_color, '#FFF102')
+                self.assertEqual(
+                    school.auto_palette,
+                    ['#2E3192', '#0F172A', '#FFF102'],
+                )
+                self.assertEqual(school.auto_primary_color, '#2E3192')
+                branding = school_settings_processor(None)
+                self.assertEqual(
+                    branding['school_logo_url'],
+                    branding['default_logo_url'],
+                )
+
 
 class BrandingContextTests(TestCase):
     def test_injects_rgb_values_for_dynamic_css(self):
@@ -123,6 +186,14 @@ class BrandingContextTests(TestCase):
             '#C8102E', '#441B22', '#F4C542',
             '#C8102E', '#441B22', '#F4C542',
         ])
+
+    def test_default_logo_and_colors_are_used_without_a_custom_logo(self):
+        branding = school_settings_processor(None)
+
+        self.assertEqual(branding['school_logo_url'], branding['default_logo_url'])
+        self.assertEqual(branding['school_favicon_url'], branding['default_logo_url'])
+        self.assertEqual(branding['primary_color'], '#2E3192')
+        self.assertEqual(branding['accent_color'], '#FFF102')
 
     def test_secondary_color_is_not_replaced_with_an_unrelated_fallback(self):
         school = SchoolSettings.get_settings()

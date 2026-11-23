@@ -76,20 +76,21 @@
                     <div class="form-row">
                         <div class="form-group half logo-upload">
                             <label for="{{ form.logo.id_for_label }}">School Logo</label>
-                            {% if school.logo and school.logo.name %}
                             <div class="current-logo">
-                                <img src="{{ school.logo.url }}" alt="Current logo" onerror="this.hidden=true">
+                                <img src="{{ school_logo_url }}" alt="Active logo"
+                                     data-brand-logo data-fallback-src="{{ default_logo_url }}">
+                                {% if not school.logo %}
+                                <small>Using the built-in default logo.</small>
+                                {% endif %}
                             </div>
-                            {% endif %}
                             {{ form.logo }}
                             <small>Uploading a new logo will automatically detect new theme colors.</small>
                             {{ form.logo.errors }}
                         </div>
                         <div class="form-group half">
                             <label for="{{ form.favicon.id_for_label }}">Favicon</label>
-                            {% if school.favicon %}
-                            <img src="{{ school.favicon.url }}" alt="Favicon" width="32" class="current-favicon" onerror="this.hidden=true">
-                            {% endif %}
+                            <img src="{{ school_favicon_url }}" alt="Active favicon" width="32" class="current-favicon"
+                                 data-brand-logo data-fallback-src="{{ default_logo_url }}">
                             {{ form.favicon }}
                             {{ form.favicon.errors }}
                         </div>
@@ -114,7 +115,7 @@
                     </div>
                     
                     {% if school.auto_primary_color %}
-                    <div class="auto-colors-notice">
+                    <div class="auto-colors-notice" id="auto-colors-notice">
                         <p>Colors sampled directly from your logo:</p>
                         <div class="color-swatches">
                             {% for color in school.auto_palette %}
@@ -144,14 +145,9 @@
                 <!-- Mock Navbar -->
                 <div class="preview-nav">
                     <div class="preview-brand">
-                        {% if school.logo and school.logo.name %}
-                            <img src="{{ school.logo.url }}" alt="Logo" id="preview-logo" onerror="this.hidden=true">
-                            <span id="preview-school-name">{{ school.school_name }}</span>
-                        {% else %}
-                            <img src="" alt="Logo" id="preview-logo" style="display:none;">
-                            <span id="preview-school-name" style="display:none;">{{ school.school_name }}</span>
-                            <span id="preview-placeholder">🚌 {{ school.school_name }}</span>
-                        {% endif %}
+                        <img src="{{ school_logo_url }}" alt="Logo" id="preview-logo"
+                             data-brand-logo data-fallback-src="{{ default_logo_url }}">
+                        <span id="preview-school-name">{{ school.school_name }}</span>
                     </div>
                 </div>
 
@@ -185,15 +181,21 @@
             secondary: document.getElementById('{{ form.secondary_color.id_for_label }}'),
             accent: document.getElementById('{{ form.accent_color.id_for_label }}'),
             schoolName: document.getElementById('{{ form.school_name.id_for_label }}'),
-            motto: document.getElementById('{{ form.motto.id_for_label }}')
+            motto: document.getElementById('{{ form.motto.id_for_label }}'),
+            logo: document.getElementById('{{ form.logo.id_for_label }}'),
+            clearLogo: document.getElementById('{{ form.logo.id_for_label }}-clear')
         };
 
         const elements = {
             title: document.getElementById('preview-title'),
             motto: document.getElementById('preview-motto'),
             schoolName: document.getElementById('preview-school-name'),
-            placeholder: document.getElementById('preview-placeholder')
+            logo: document.getElementById('preview-logo')
         };
+        const defaultLogoUrl = '{{ default_logo_url|escapejs }}';
+        const savedLogoUrl = '{{ school_logo_url|escapejs }}';
+        const autoColorsNotice = document.getElementById('auto-colors-notice');
+        let currentLogoObjectUrl = null;
 
         function updatePreview() {
             // Update Colors
@@ -213,10 +215,111 @@
             // Update Text
             elements.title.textContent = inputs.schoolName.value || 'School Name';
             elements.schoolName.textContent = inputs.schoolName.value;
-            if(elements.placeholder) {
-                elements.placeholder.textContent = '🚌 ' + (inputs.schoolName.value || 'School Name');
-            }
             elements.motto.textContent = inputs.motto.value;
+        }
+
+        function previewLogoColors(image) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            const context = canvas.getContext('2d', { willReadFrequently: true });
+            context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+            const buckets = new Map();
+            const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+            for (let index = 0; index < pixels.length; index += 4) {
+                const red = pixels[index];
+                const green = pixels[index + 1];
+                const blue = pixels[index + 2];
+                if (pixels[index + 3] < 200 || (red > 235 && green > 235 && blue > 235)) {
+                    continue;
+                }
+                const key = [red, green, blue].map(value => Math.floor(value / 16)).join(',');
+                const bucket = buckets.get(key) || { count: 0, red: 0, green: 0, blue: 0 };
+                bucket.count += 1;
+                bucket.red += red;
+                bucket.green += green;
+                bucket.blue += blue;
+                buckets.set(key, bucket);
+            }
+
+            const colors = [...buckets.values()].map(bucket => {
+                const rgb = [
+                    Math.round(bucket.red / bucket.count),
+                    Math.round(bucket.green / bucket.count),
+                    Math.round(bucket.blue / bucket.count)
+                ];
+                return {
+                    count: bucket.count,
+                    rgb,
+                    hex: '#' + rgb.map(value => value.toString(16).padStart(2, '0')).join('').toUpperCase(),
+                    saturation: Math.max(...rgb) - Math.min(...rgb)
+                };
+            });
+            const ordered = [
+                ...colors.filter(color => color.saturation >= 46).sort((a, b) => b.count - a.count),
+                ...colors.filter(color => color.saturation < 46).sort((a, b) => b.count - a.count)
+            ];
+            const palette = [];
+            for (const color of ordered) {
+                const distinct = palette.every(previous =>
+                    Math.sqrt(color.rgb.reduce((sum, channel, i) => sum + (channel - previous.rgb[i]) ** 2, 0)) >= 38
+                );
+                if (distinct) {
+                    palette.push(color);
+                }
+                if (palette.length === 3) {
+                    break;
+                }
+            }
+            if (palette.length) {
+                inputs.primary.value = palette[0].hex;
+                inputs.secondary.value = (palette[1] || palette[0]).hex;
+                inputs.accent.value = (palette[2] || palette[1] || palette[0]).hex;
+                updatePreview();
+            }
+        }
+
+        inputs.logo.addEventListener('change', () => {
+            if (inputs.clearLogo) {
+                inputs.clearLogo.checked = false;
+            }
+            if (autoColorsNotice) {
+                autoColorsNotice.hidden = true;
+            }
+            const file = inputs.logo.files[0];
+            if (!file) {
+                return;
+            }
+            if (currentLogoObjectUrl) {
+                URL.revokeObjectURL(currentLogoObjectUrl);
+            }
+            currentLogoObjectUrl = URL.createObjectURL(file);
+            elements.logo.src = currentLogoObjectUrl;
+            const image = new Image();
+            image.onload = () => previewLogoColors(image);
+            image.src = currentLogoObjectUrl;
+        });
+
+        if (inputs.clearLogo) {
+            inputs.clearLogo.addEventListener('change', () => {
+                if (inputs.clearLogo.checked) {
+                    inputs.logo.value = '';
+                    elements.logo.src = defaultLogoUrl;
+                    if (autoColorsNotice) {
+                        autoColorsNotice.hidden = true;
+                    }
+                    inputs.primary.value = '{{ default_primary_color }}';
+                    inputs.secondary.value = '{{ default_secondary_color }}';
+                    inputs.accent.value = '{{ default_accent_color }}';
+                } else {
+                    elements.logo.src = savedLogoUrl;
+                    if (autoColorsNotice) {
+                        autoColorsNotice.hidden = false;
+                    }
+                }
+                updatePreview();
+            });
         }
 
         // Attach listeners

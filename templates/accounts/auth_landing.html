@@ -8,13 +8,8 @@
 <div class="auth-container" style="max-width: 600px;">
     <div class="auth-card text-center">
         <div class="auth-header">
-            {% if school.logo and school.logo.name %}
-            <img src="{{ school.logo.url }}" alt="{{ school.school_name }}" class="auth-logo"
-                 onerror="this.hidden=true; this.nextElementSibling.hidden=false;">
-            <div class="auth-icon" hidden>🚌</div>
-            {% else %}
-            <div class="auth-icon">🚌</div>
-            {% endif %}
+            <img src="{{ school_logo_url }}" alt="{{ school.school_name }}" class="auth-logo"
+                 data-brand-logo data-fallback-src="{{ default_logo_url }}">
             <h1 class="auth-title">Welcome to Shuttle Tracker</h1>
             <p class="auth-subtitle">Please select your role to continue</p>
         </div>

@@ -3,6 +3,35 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Brand logos may reference a deleted upload or an unavailable media host.
+    // Replace them with the bundled logo, and hide the element if even that
+    // fallback is unavailable so a broken-image icon is never shown.
+    document.querySelectorAll('[data-brand-logo]').forEach((img) => {
+        const fallbackSrc = img.dataset.fallbackSrc;
+
+        img.addEventListener('error', () => {
+            if (fallbackSrc && img.getAttribute('src') !== fallbackSrc) {
+                img.setAttribute('src', fallbackSrc);
+                return;
+            }
+
+            img.hidden = true;
+        });
+
+        if (img.complete && img.naturalWidth === 0) {
+            img.dispatchEvent(new Event('error'));
+        }
+    });
+
+    document.querySelectorAll('link[rel="icon"][data-brand-favicon]').forEach((icon) => {
+        const fallbackSrc = icon.dataset.fallbackSrc;
+        icon.addEventListener('error', () => {
+            if (fallbackSrc && icon.getAttribute('href') !== fallbackSrc) {
+                icon.setAttribute('href', fallbackSrc);
+            }
+        });
+    });
+
     // 1. Mobile Navigation Toggle
     const navToggle = document.getElementById('nav-toggle');
     const navLinks = document.getElementById('nav-links');

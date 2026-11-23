@@ -7,11 +7,8 @@
     <title>{% block title %}{{ school.school_name }}{% endblock %} | Shuttle Tracker</title>
 
     <!-- Dynamic favicon -->
-    {% if school.favicon %}
-    <link rel="icon" href="{{ school.favicon.url }}" type="image/x-icon">
-    {% else %}
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚌</text></svg>">
-    {% endif %}
+    <link rel="icon" href="{{ school_favicon_url }}" data-brand-favicon
+          data-fallback-src="{{ default_logo_url }}">
 
     <!-- Brand fonts and icons -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -44,6 +41,7 @@
 </head>
 <body class="{% block body_class %}{% endblock %}">
 
+    {% if request.resolver_match.url_name != 'home' %}
     <!-- Institutional notice -->
     <div class="atu-utility">
         <div class="atu-container atu-utility-inner">
@@ -52,18 +50,14 @@
             <span class="atu-utility-hours"><i class="fa-regular fa-clock"></i> Service: 06:30 AM – 11:30 PM</span>
         </div>
     </div>
+    {% endif %}
 
     <!-- Navigation Bar -->
-    <nav class="navbar atu-navbar" id="main-navbar">
+    <nav class="navbar atu-navbar {% if request.resolver_match.url_name == 'home' %}home-navbar{% endif %}" id="main-navbar">
         <div class="nav-container">
             <a href="/" class="nav-brand atu-brand">
-                {% if school.logo and school.logo.name %}
-                <img src="{{ school.logo.url }}" alt="{{ school.school_name }} Logo" class="nav-logo"
-                     onerror="this.hidden=true; this.nextElementSibling.hidden=false;">
-                <span class="atu-brand-mark" hidden><i class="fa-solid fa-graduation-cap"></i></span>
-                {% else %}
-                <span class="atu-brand-mark"><i class="fa-solid fa-graduation-cap"></i></span>
-                {% endif %}
+                <img src="{{ school_logo_url }}" alt="{{ school.school_name }} Logo" class="nav-logo" width="150" height="40"
+                     data-brand-logo data-fallback-src="{{ default_logo_url }}">
                 <span class="nav-school-name">{{ school.school_name|default:'ATU School Shuttle' }}</span>
             </a>
 
@@ -72,7 +66,12 @@
             </button>
 
             <ul class="nav-links" id="nav-links">
-                {% if not user.is_authenticated %}
+                {% if request.resolver_match.url_name == 'home' %}
+                    <li><a href="{% url 'school_settings:home' %}" class="nav-link active">Home</a></li>
+                    <li><a href="{% url 'tracking:bus_list' %}" class="nav-link">Live Shuttle</a></li>
+                    <li><a href="#routes-schedules" class="nav-link">Routes &amp; Schedules</a></li>
+                    <li><a href="{% url 'accounts:login' %}" class="btn atu-nav-cta btn-sm">Login</a></li>
+                {% elif not user.is_authenticated %}
                     <li><a href="/" class="nav-link {% if request.path == '/' %}active{% endif %}">Home</a></li>
                     <li><a href="/tracking/" class="nav-link">Live Radar</a></li>
                     <li><a href="/tracking/" class="nav-link">Routes &amp; Schedules</a></li>
@@ -130,6 +129,38 @@
 
     <!-- Footer -->
     {% block footer %}
+    {% if request.resolver_match.url_name == 'home' %}
+    <footer class="home-footer">
+        <div class="home-container home-footer-grid">
+            <section>
+                <h2>About the Shuttle Service</h2>
+                <p>{{ school.about|default:'Find campus routes, check pickup stops, and follow active shuttles in one place.' }}</p>
+            </section>
+            <section>
+                <h2>Contact</h2>
+                {% if school.address %}<p>{{ school.address }}</p>{% endif %}
+                {% if school.phone %}<p><a href="tel:{{ school.phone }}">{{ school.phone }}</a></p>{% endif %}
+                {% if school.email %}<p><a href="mailto:{{ school.email }}">{{ school.email }}</a></p>{% endif %}
+            </section>
+            <section>
+                <h2>Help &amp; Support</h2>
+                {% if school.email %}
+                <p><a href="mailto:{{ school.email }}?subject=Campus%20shuttle%20support">Contact the shuttle team</a></p>
+                {% else %}
+                <p>Contact your campus transport office for shuttle support.</p>
+                {% endif %}
+            </section>
+            <section id="privacy-note">
+                <h2><a href="#privacy-note">Privacy Policy</a></h2>
+                <p>Driver GPS updates support live tracking and operational history. The homepage search does not request rider location.</p>
+            </section>
+        </div>
+        <div class="home-container home-footer-bottom">
+            <span>© {% now "Y" %} {{ school.school_name|default:'Campus Shuttle' }}</span>
+            <a href="/">Back to Home</a>
+        </div>
+    </footer>
+    {% else %}
     <footer class="atu-footer">
         <div class="atu-container atu-footer-grid">
             <div>
@@ -166,6 +197,7 @@
             <p>© {% now "Y" %} {{ school.school_name|default:'Accra Technical University' }}. All rights reserved.</p>
         </div>
     </footer>
+    {% endif %}
     {% endblock %}
 
     <!-- Main JS -->

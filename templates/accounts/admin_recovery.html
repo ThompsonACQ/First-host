@@ -7,11 +7,8 @@
 <div class="auth-container">
     <div class="auth-card">
         <div class="auth-header">
-            {% if school.logo and school.logo.name %}
-            <img src="{{ school.logo.url }}" alt="{{ school.school_name }}" class="auth-logo"
-                 onerror="this.hidden=true; this.nextElementSibling.hidden=false;">
-            <div class="auth-icon" hidden>🚌</div>
-            {% endif %}
+            <img src="{{ school_logo_url }}" alt="{{ school.school_name }}" class="auth-logo"
+                 data-brand-logo data-fallback-src="{{ default_logo_url }}">
             <h1 class="auth-title">Recover Administrator Account</h1>
             <p class="auth-subtitle">Answer all three recovery questions to set a new administrator email and password.</p>
         </div>

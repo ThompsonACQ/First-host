@@ -7,6 +7,7 @@ import math
 
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse
+from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
 from django.utils import timezone
 
@@ -46,6 +47,101 @@ def _distance_m(lat1, lng1, lat2, lng2):
          + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2))
          * math.sin(d_lng / 2) ** 2)
     return radius * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+@require_GET
+def route_search_api(request):
+    """Find active routes and assigned buses between two persisted stops."""
+    pickup = request.GET.get('pickup', '').strip()
+    destination = request.GET.get('destination', '').strip()
+    if not pickup or not destination or pickup.casefold() == destination.casefold():
+        return JsonResponse(
+            {'detail': 'Choose two different pickup and destination stops.'},
+            status=400,
+        )
+
+    now = timezone.now()
+    live_since = now - timedelta(minutes=2)
+    routes = (
+        Route.objects.filter(active=True)
+        .prefetch_related('stops')
+        .order_by('name')
+    )
+    matching_routes = []
+
+    for route in routes:
+        stop_names = [
+            route.start_location,
+            *(stop.name for stop in route.stops.all()),
+            route.destination,
+        ]
+        stop_names = [name.strip() for name in stop_names]
+        pickup_indexes = [
+            index for index, name in enumerate(stop_names)
+            if name.casefold() == pickup.casefold()
+        ]
+        destination_indexes = [
+            index for index, name in enumerate(stop_names)
+            if name.casefold() == destination.casefold()
+        ]
+        segment_indexes = next(
+            (
+                (pickup_index, destination_index)
+                for pickup_index in pickup_indexes
+                for destination_index in destination_indexes
+                if pickup_index < destination_index
+            ),
+            None,
+        )
+        if segment_indexes is None:
+            continue
+
+        start, end = segment_indexes
+        buses = []
+        for bus in (
+            route.buses.filter(active=True)
+            .select_related('driver')
+            .order_by('bus_number')
+        ):
+            location = bus.latest_location
+            if location and location.timestamp >= live_since:
+                gps_status = 'Live GPS'
+            elif location:
+                seconds_ago = max(0, int((now - location.timestamp).total_seconds()))
+                if seconds_ago < 3600:
+                    age = f'{max(1, seconds_ago // 60)} min'
+                elif seconds_ago < 86400:
+                    age = f'{seconds_ago // 3600} hr'
+                else:
+                    days = seconds_ago // 86400
+                    age = f'{days} day' if days == 1 else f'{days} days'
+                gps_status = f'Last location {age} ago'
+            else:
+                gps_status = 'No GPS update yet'
+
+            buses.append({
+                'bus_number': bus.bus_number,
+                'status': bus.get_status_display(),
+                'driver': bus.driver_name,
+                'available_seats': bus.available_seats,
+                'capacity': bus.capacity,
+                'gps_status': gps_status,
+                'track_url': reverse('tracking:live_tracking', args=[bus.pk]),
+            })
+
+        matching_routes.append({
+            'name': route.name,
+            'pickup': stop_names[start],
+            'destination': stop_names[end],
+            'stops': stop_names[start:end + 1],
+            'buses': buses,
+        })
+
+    return JsonResponse({
+        'pickup': pickup,
+        'destination': destination,
+        'routes': matching_routes,
+    })
 
 
 @require_GET
