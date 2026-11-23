@@ -4,6 +4,7 @@ Django settings for School Shuttle Bus Tracking System.
 
 import os
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 import dj_database_url
 from decouple import config
@@ -88,12 +89,43 @@ if not DEBUG:
             'Set CSRF_TRUSTED_ORIGINS or configure a production hostname.'
         )
 
-CLOUDINARY_CREDENTIALS = {
-    'CLOUD_NAME': config('CLOUDINARY_CLOUD_NAME', default='').strip(),
-    'API_KEY': config('CLOUDINARY_API_KEY', default='').strip(),
-    'API_SECRET': config('CLOUDINARY_API_SECRET', default='').strip(),
-}
-CLOUDINARY_CONFIGURED = all(CLOUDINARY_CREDENTIALS.values())
+CLOUDINARY_CREDENTIALS = {}
+named_cloud_name = config('CLOUDINARY_CLOUD_NAME', default='').strip()
+named_api_key = config('CLOUDINARY_API_KEY', default='').strip()
+named_api_secret = config('CLOUDINARY_API_SECRET', default='').strip()
+cloudinary_url = os.environ.get('CLOUDINARY_URL', '').strip()
+
+if all((named_cloud_name, named_api_key, named_api_secret)):
+    # Explicit variables are authoritative. Removing CLOUDINARY_URL prevents
+    # an older Render variable from overriding the named credentials.
+    CLOUDINARY_CREDENTIALS = {
+        'CLOUD_NAME': named_cloud_name,
+        'API_KEY': named_api_key,
+        'API_SECRET': named_api_secret,
+    }
+    os.environ.pop('CLOUDINARY_URL', None)
+elif cloudinary_url:
+    try:
+        parsed_url = urlsplit(cloudinary_url)
+        if parsed_url.scheme != 'cloudinary' or not all(
+            (parsed_url.hostname, parsed_url.username, parsed_url.password)
+        ):
+            raise ValueError
+        CLOUDINARY_CREDENTIALS = {
+            'CLOUD_NAME': parsed_url.hostname,
+            'API_KEY': unquote(parsed_url.username),
+            'API_SECRET': unquote(parsed_url.password),
+        }
+    except (TypeError, ValueError):
+        if not DEBUG:
+            raise ImproperlyConfigured('CLOUDINARY_URL is invalid.')
+elif any((named_cloud_name, named_api_key, named_api_secret)):
+    raise ImproperlyConfigured(
+        'Configure CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and '
+        'CLOUDINARY_API_SECRET together.'
+    )
+
+CLOUDINARY_CONFIGURED = bool(CLOUDINARY_CREDENTIALS) and all(CLOUDINARY_CREDENTIALS.values())
 SKIP_CLOUDINARY_CONFIG_CHECK = (
     os.environ.get('SKIP_CLOUDINARY_CONFIG_CHECK', '').strip() == '1'
 )
@@ -217,7 +249,14 @@ if REDIS_URL:
     CHANNEL_LAYERS = {
         'default': {
             'BACKEND': 'channels_redis.core.RedisChannelLayer',
-            'CONFIG': {'hosts': [REDIS_URL]},
+            'CONFIG': {
+                'hosts': [REDIS_URL],
+                'prefix': 'campus-shuttle',
+                'expiry': 60,
+                'capacity': 1500,
+                'sockets_timeout': 2,
+                'socket_connect_timeout': 2,
+            },
         }
     }
 else:
@@ -268,9 +307,15 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 if CLOUDINARY_CONFIGURED:
     CLOUDINARY_STORAGE = CLOUDINARY_CREDENTIALS
-    # Keep this compatibility setting for Django/storage packages that read
-    # DEFAULT_FILE_STORAGE in addition to the Django 4.2 STORAGES setting.
-    DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+    import cloudinary
+
+    if all(CLOUDINARY_CREDENTIALS.get(key) for key in ('CLOUD_NAME', 'API_KEY', 'API_SECRET')):
+        cloudinary.config(
+            cloud_name=CLOUDINARY_CREDENTIALS['CLOUD_NAME'],
+            api_key=CLOUDINARY_CREDENTIALS['API_KEY'],
+            api_secret=CLOUDINARY_CREDENTIALS['API_SECRET'],
+            secure=True,
+        )
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

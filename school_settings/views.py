@@ -204,13 +204,16 @@ def preview_api(request):
     school = SchoolSettings.get_settings()
     logo_url = request.build_absolute_uri('/static/images/default-school-logo.png')
     if school.has_logo:
-        uploaded_url = school.logo.url
-        if not (
-            uploaded_url.startswith('/media/')
-            and not settings.DEBUG
-            and not getattr(settings, 'CLOUDINARY_CONFIGURED', False)
-        ):
-            logo_url = uploaded_url
+        try:
+            uploaded_url = school.logo.url
+            if not (
+                uploaded_url.startswith('/media/')
+                and not settings.DEBUG
+                and not getattr(settings, 'CLOUDINARY_CONFIGURED', False)
+            ):
+                logo_url = uploaded_url
+        except Exception:
+            logger.exception('Could not resolve uploaded school logo URL for live preview.')
     return JsonResponse({
         'school_name': school.school_name,
         'motto': school.motto,

@@ -30,8 +30,14 @@ def school_settings_processor(request):
     """
     school = SchoolSettings.get_settings()
     default_logo_url = static('images/default-school-logo.png')
-    uploaded_logo_url = school.logo.url if school.has_logo else ''
-    uploaded_favicon_url = school.favicon.url if school.favicon else ''
+    try:
+        uploaded_logo_url = school.logo.url if school.has_logo else ''
+    except Exception:
+        uploaded_logo_url = ''
+    try:
+        uploaded_favicon_url = school.favicon.url if school.favicon else ''
+    except Exception:
+        uploaded_favicon_url = ''
     # Render instances use Cloudinary for durable uploads. If credentials are
     # missing, or an old /media/ reference remains, use the bundled logo rather
     # than showing a broken image.

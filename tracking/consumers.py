@@ -80,13 +80,26 @@ class BusTrackingConsumer(AsyncWebsocketConsumer):
     All clients tracking bus 5 subscribe to group "bus_5".
     """
 
+    async def _safe_channel_action(self, action, *args, **kwargs):
+        """Keep database-backed GPS updates working if Redis is temporarily unavailable."""
+        try:
+            await action(*args, **kwargs)
+            return True
+        except Exception:
+            logger.exception(
+                'Redis channel operation failed for bus %s; continuing WebSocket processing.',
+                self.bus_id,
+            )
+            return False
+
     async def connect(self):
         self.bus_id = self.scope['url_route']['kwargs']['bus_id']
         self.group_name = f'bus_{self.bus_id}'
         self.user = self.scope.get('user')
 
         # Join the bus-specific broadcast group
-        await self.channel_layer.group_add(
+        await self._safe_channel_action(
+            self.channel_layer.group_add,
             self.group_name,
             self.channel_name,
         )
@@ -95,7 +108,11 @@ class BusTrackingConsumer(AsyncWebsocketConsumer):
         self.driver_group_name = None
         if self.user and self.user.is_authenticated and self.user.is_driver:
             self.driver_group_name = f'driver_alerts_{self.user.pk}'
-            await self.channel_layer.group_add(self.driver_group_name, self.channel_name)
+            await self._safe_channel_action(
+                self.channel_layer.group_add,
+                self.driver_group_name,
+                self.channel_name,
+            )
         await self.accept()
 
         # Send an initial connection acknowledgement
@@ -111,12 +128,17 @@ class BusTrackingConsumer(AsyncWebsocketConsumer):
         )
 
     async def disconnect(self, close_code):
-        await self.channel_layer.group_discard(
+        await self._safe_channel_action(
+            self.channel_layer.group_discard,
             self.group_name,
             self.channel_name,
         )
         if self.driver_group_name:
-            await self.channel_layer.group_discard(self.driver_group_name, self.channel_name)
+            await self._safe_channel_action(
+                self.channel_layer.group_discard,
+                self.driver_group_name,
+                self.channel_name,
+            )
         logger.info(
             'WebSocket disconnected: bus=%s code=%s',
             self.bus_id, close_code,
@@ -198,7 +220,8 @@ class BusTrackingConsumer(AsyncWebsocketConsumer):
         bus_data, eta = result
 
         # Broadcast to all clients in the bus group
-        await self.channel_layer.group_send(
+        broadcast_saved = await self._safe_channel_action(
+            self.channel_layer.group_send,
             self.group_name,
             {
                 'type': 'broadcast_location',
@@ -216,6 +239,11 @@ class BusTrackingConsumer(AsyncWebsocketConsumer):
                 'off_route': bus_data['off_route'],
             }
         )
+        if not broadcast_saved:
+            await self.send(text_data=json.dumps({
+                'type': 'warning',
+                'message': 'Location saved, but live broadcast is temporarily unavailable.',
+            }))
 
     async def handle_stop_sharing(self, data):
         """Driver stopped sharing — mark bus as stopped and notify."""
@@ -224,7 +252,8 @@ class BusTrackingConsumer(AsyncWebsocketConsumer):
 
         bus_data = await self.mark_bus_stopped()
         if bus_data:
-            await self.channel_layer.group_send(
+            await self._safe_channel_action(
+                self.channel_layer.group_send,
                 self.group_name,
                 {
                     'type': 'broadcast_location',
@@ -396,11 +425,17 @@ class AdminAlertConsumer(AsyncWebsocketConsumer):
         if not user or not user.is_authenticated or not (user.is_admin or user.is_superuser):
             await self.close(code=4403)
             return
-        await self.channel_layer.group_add(self.group_name, self.channel_name)
+        try:
+            await self.channel_layer.group_add(self.group_name, self.channel_name)
+        except Exception:
+            logger.exception('Redis unavailable while connecting to the admin alert channel.')
         await self.accept()
 
     async def disconnect(self, close_code):
-        await self.channel_layer.group_discard(self.group_name, self.channel_name)
+        try:
+            await self.channel_layer.group_discard(self.group_name, self.channel_name)
+        except Exception:
+            logger.exception('Redis unavailable while disconnecting from the admin alert channel.')
 
     async def emergency_alert(self, event):
         await self.send(text_data=json.dumps({

@@ -1,8 +1,12 @@
 from io import BytesIO
+import os
+import subprocess
+import sys
 import tempfile
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.conf import settings
 from django.test import SimpleTestCase, TestCase
 from django.test.utils import override_settings
 from PIL import Image, ImageDraw
@@ -58,6 +62,36 @@ class LogoColorExtractionTests(SimpleTestCase):
 
         self.assertEqual(len(colors), 6)
         self.assertEqual(set(colors), set(logo_colors))
+
+
+class CloudinaryConfigurationTests(SimpleTestCase):
+    def test_named_environment_credentials_override_stale_cloudinary_url(self):
+        env = os.environ.copy()
+        env.update({
+            'DEBUG': 'True',
+            'CLOUDINARY_CLOUD_NAME': 'nf8bpzgn',
+            'CLOUDINARY_API_KEY': 'test-key',
+            'CLOUDINARY_API_SECRET': 'test-secret',
+            'CLOUDINARY_URL': 'cloudinary://old-key:old-secret@KAY123',
+        })
+        result = subprocess.run(
+            [
+                sys.executable,
+                '-c',
+                (
+                    "import django; django.setup(); "
+                    "from django.conf import settings; "
+                    "print(settings.CLOUDINARY_CREDENTIALS['CLOUD_NAME'])"
+                ),
+            ],
+            cwd=os.getcwd(),
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+        self.assertEqual(result.stdout.strip(), 'nf8bpzgn')
 
 
 class LogoAdminValidationTests(SimpleTestCase):
