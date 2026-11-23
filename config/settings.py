@@ -268,6 +268,9 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 if CLOUDINARY_CONFIGURED:
     CLOUDINARY_STORAGE = CLOUDINARY_CREDENTIALS
+    # Keep this compatibility setting for Django/storage packages that read
+    # DEFAULT_FILE_STORAGE in addition to the Django 4.2 STORAGES setting.
+    DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

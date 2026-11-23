@@ -4,6 +4,7 @@ School Settings views — home page, settings CRUD, and live branding API.
 
 import json
 import logging
+import xml.etree.ElementTree as ET
 
 from django import forms
 from django.conf import settings
@@ -11,6 +12,7 @@ from django.contrib import messages
 from django.http import JsonResponse
 from django.shortcuts import render, redirect
 from django.views.decorators.http import require_POST
+from PIL import Image, UnidentifiedImageError
 
 from .models import SchoolSettings
 from .branding import apply_default_branding, extract_colors_from_logo
@@ -50,6 +52,22 @@ class SchoolSettingsForm(forms.ModelForm):
                 )
             if logo.size > 5 * 1024 * 1024:  # 5 MB
                 raise forms.ValidationError('Logo file too large. Maximum size is 5 MB.')
+        if logo:
+            if getattr(logo, 'content_type', '').lower() == 'image/svg+xml':
+                try:
+                    logo.seek(0)
+                    ET.fromstring(logo.read(1024 * 1024))
+                    logo.seek(0)
+                except (ET.ParseError, OSError, ValueError):
+                    raise forms.ValidationError('The uploaded SVG is not valid.')
+                return logo
+            try:
+                logo.seek(0)
+                with Image.open(logo) as image:
+                    image.verify()
+                logo.seek(0)
+            except (OSError, UnidentifiedImageError, ValueError):
+                raise forms.ValidationError('The uploaded logo is not a valid image.')
         return logo
 
     def clean_favicon(self):
@@ -134,8 +152,19 @@ def settings_view(request):
             elif logo_cleared:
                 apply_default_branding(instance)
 
-            instance.save()
-            messages.success(request, 'School settings saved successfully.')
+            try:
+                instance.save()
+            except Exception:
+                logger.exception(
+                    'Failed to save SchoolSettings or upload branding image to Cloudinary.',
+                    extra={'username': getattr(request.user, 'username', '')},
+                )
+                messages.error(
+                    request,
+                    'The branding change could not be saved. Check the image and Cloudinary configuration, then try again.',
+                )
+            else:
+                messages.success(request, 'School settings saved successfully.')
             return redirect('school_settings:settings')
     else:
         form = SchoolSettingsForm(instance=school)

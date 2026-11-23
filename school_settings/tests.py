@@ -6,7 +6,9 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, TestCase
 from django.test.utils import override_settings
 from PIL import Image, ImageDraw
+from unittest.mock import patch
 
+from .admin import SchoolSettingsAdminForm
 from .branding import extract_colors_from_logo
 from .context_processors import school_settings_processor
 from .models import SchoolSettings
@@ -58,7 +60,90 @@ class LogoColorExtractionTests(SimpleTestCase):
         self.assertEqual(set(colors), set(logo_colors))
 
 
+class LogoAdminValidationTests(SimpleTestCase):
+    def test_admin_rejects_non_image_logo(self):
+        logo = SimpleUploadedFile(
+            'logo.txt',
+            b'not an image',
+            content_type='text/plain',
+        )
+        form = SchoolSettingsAdminForm(
+            data={},
+            files={'logo': logo},
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('logo', form.errors)
+
+    def test_admin_accepts_valid_png_logo(self):
+        image_data = BytesIO()
+        Image.new('RGB', (40, 40), '#C8102E').save(image_data, format='PNG')
+        logo = SimpleUploadedFile(
+            'logo.png',
+            image_data.getvalue(),
+            content_type='image/png',
+        )
+        school = SchoolSettings(
+            pk=1,
+            school_name='Test Shuttle',
+        )
+        form = SchoolSettingsAdminForm(
+            instance=school,
+            data={
+                'school_name': school.school_name,
+                'motto': school.motto,
+                'description': school.description,
+                'about': school.about,
+                'address': school.address,
+                'phone': school.phone,
+                'email': school.email,
+                'website': school.website,
+                'primary_color': school.primary_color,
+                'secondary_color': school.secondary_color,
+                'accent_color': school.accent_color,
+            },
+            files={'logo': logo},
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+
+
 class LogoUploadViewTests(TestCase):
+    def test_storage_failure_returns_form_with_friendly_error(self):
+        admin = get_user_model().objects.create_superuser(
+            username='storage-failure-admin',
+            email='storage-failure@example.com',
+            password='test-password',
+        )
+        self.client.force_login(admin)
+        school = SchoolSettings.get_settings()
+        image_data = BytesIO()
+        Image.new('RGB', (40, 40), '#C8102E').save(image_data, format='PNG')
+
+        data = {
+            'school_name': school.school_name,
+            'motto': school.motto,
+            'description': school.description,
+            'about': school.about,
+            'address': school.address,
+            'phone': school.phone,
+            'email': school.email,
+            'website': school.website,
+            'primary_color': school.primary_color,
+            'secondary_color': school.secondary_color,
+            'accent_color': school.accent_color,
+            'logo': SimpleUploadedFile(
+                'logo.png',
+                image_data.getvalue(),
+                content_type='image/png',
+            ),
+        }
+
+        with patch.object(SchoolSettings, 'save', side_effect=RuntimeError('Cloudinary unavailable')):
+            response = self.client.post('/settings/', data)
+
+        self.assertEqual(response.status_code, 302)
+
     def test_uploading_logo_applies_detected_colors_over_old_manual_colors(self):
         image = Image.new('RGBA', (120, 80), 'white')
         draw = ImageDraw.Draw(image)
